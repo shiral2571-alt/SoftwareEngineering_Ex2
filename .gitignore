@@ -1,0 +1,19 @@
+# Local tool settings
+.claude/
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets and local data (API keys, class data)
+.env
+*.db
+*.sqlite
+
+# OS
+.DS_Store
+Thumbs.db

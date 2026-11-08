@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sound Attendance Spike</title>
+<!-- Spike / Proof of Concept for docs/CONCEPT.md: can a laptop speaker send a token to phones over sound? -->
+<script src="https://cdn.jsdelivr.net/npm/ggwave@0.4.0/ggwave.js"></script>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --fg:#1b1f24; --muted:#5b6470; --accent:#2f6fde; --ok:#1f8a4c; --bad:#c23b3b; --line:#dde1e6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171b; --card:#1d2126; --fg:#e8eaed; --muted:#9aa3ad; --accent:#6c9cff; --ok:#4cc27e; --bad:#ff7a7a; --line:#2c3238; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.3rem; margin:8px 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .tabs { display:flex; gap:8px; margin-bottom:16px; }
+  .tabs button { flex:1; }
+  button { font:inherit; padding:12px 16px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button[aria-pressed="true"] { outline:2px solid var(--accent); }
+  label { display:block; margin:8px 0 4px; color:var(--muted); font-size:.9rem; }
+  select, input { font:inherit; width:100%; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--fg); }
+  .token { font:700 2.4rem/1.2 ui-monospace, Consolas, monospace; letter-spacing:.15em; text-align:center; padding:12px 0; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .row > * { flex:1; }
+  .status { color:var(--muted); font-size:.9rem; min-height:1.5em; }
+  table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  th, td { text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); }
+  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🔊 Sound Attendance — Spike</h1>
+  <p class="sub">Laptop = <b>Broadcast</b>. Phone = <b>Listen</b>. Does the phone hear the code?</p>
+
+  <div class="tabs">
+    <button id="tabTx" aria-pressed="true">🔊 Broadcast</button>
+    <button id="tabRx" aria-pressed="false">🎤 Listen</button>
+  </div>
+
+  <!-- ===== Broadcast (lecturer laptop) ===== -->
+  <section id="tx" class="card">
+    <label for="protocol">Protocol</label>
+    <select id="protocol">
+      <option value="GGWAVE_PROTOCOL_ULTRASOUND_NORMAL">Ultrasound – normal (inaudible)</option>
+      <option value="GGWAVE_PROTOCOL_ULTRASOUND_FAST">Ultrasound – fast (inaudible, less reliable)</option>
+      <option value="GGWAVE_PROTOCOL_AUDIBLE_NORMAL" selected>Audible – normal (most robust)</option>
+      <option value="GGWAVE_PROTOCOL_AUDIBLE_FASTEST">Audible – fastest</option>
+      <option value="GGWAVE_PROTOCOL_AUDIBLE_FAST">Audible – fast (less reliable)</option>
+    </select>
+    <label for="volume">Volume (1–100)</label>
+    <input id="volume" type="number" min="1" max="100" value="50">
+    <div class="token" id="txToken">——————</div>
+    <div class="row">
+      <button class="primary" id="sendBtn">Send new code</button>
+      <button id="autoBtn" aria-pressed="false">Auto every 10 s</button>
+    </div>
+    <p class="status" id="txStatus"></p>
+  </section>
+
+  <!-- ===== Listen (student phone) ===== -->
+  <section id="rx" class="card hidden">
+    <button class="primary" id="listenBtn" style="width:100%">Start listening</button>
+    <div class="token" id="rxToken">——————</div>
+    <p class="status" id="rxStatus">Tap “Start listening” and allow the microphone.</p>
+  </section>
+
+  <!-- ===== Test log (feeds the Tools Report) ===== -->
+  <section class="card">
+    <b>Test log</b>
+    <div class="row">
+      <div><label for="device">Device</label><input id="device" placeholder="e.g. iPhone 13 / Safari"></div>
+      <div><label for="distance">Distance (m)</label><input id="distance" type="number" min="0" step="0.5" value="1"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="logOk">✅ Received</button>
+      <button id="logFail">❌ Not received</button>
+    </div>
+    <table style="margin-top:12px">
+      <thead><tr><th>Time</th><th>Device</th><th>Protocol</th><th>m</th><th>Result</th></tr></thead>
+      <tbody id="logBody"></tbody>
+    </table>
+    <div class="row" style="margin-top:8px">
+      <button id="csvBtn">Download CSV</button>
+      <button id="clearBtn">Clear log</button>
+    </div>
+  </section>
+</main>
+
+<script>
+// ---------- ggwave setup ----------
+let ggwave = null, instance = null, ctx = null;
+ggwave_factory().then(m => { ggwave = m; });
+
+function ensureAudio() {
+  if (!ggwave) throw new Error("ggwave is still loading — try again in a second");
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+    const p = ggwave.getDefaultParameters();
+    p.sampleRateInp = ctx.sampleRate;
+    p.sampleRateOut = ctx.sampleRate;
+    instance = ggwave.init(p);
+  }
+  if (ctx.state === "suspended") ctx.resume(); // iOS needs a user gesture
+}
+
+// ggwave works on raw bytes; reinterpret the same memory as another typed array
+function convertTypedArray(src, Type) {
+  const buf = new ArrayBuffer(src.byteLength);
+  new src.constructor(buf).set(src);
+  return new Type(buf);
+}
+
+// ---------- Token generation (design decision!) ----------
+// Returns the one-time token that will be broadcast as sound.
+// TODO(you): decide the token format — see the open decisions in docs/CONCEPT.md §10.
+//   - length & alphabet (avoid look-alikes such as O/0, I/1?)
+//   - must match the receiver's check: /^[A-Z0-9]{4,12}$/
+//   - optional: a last check character so corrupted decodes are detected (see spike finding).
+function generateToken() {
+  return "ABC123"; // placeholder so the page works — replace me
+}
+
+// ---------- Broadcast ----------
+const $ = id => document.getElementById(id);
+let autoTimer = null;
+
+function sendToken() {
+  try {
+    ensureAudio();
+    const token = generateToken();
+    const proto = ggwave.ProtocolId[$("protocol").value];
+    const vol = Math.max(1, Math.min(100, +$("volume").value || 50));
+    const waveform = ggwave.encode(instance, token, proto, vol);
+    const samples = convertTypedArray(waveform, Float32Array);
+    const buffer = ctx.createBuffer(1, samples.length, ctx.sampleRate);
+    buffer.getChannelData(0).set(samples);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ctx.destination);
+    src.start(0);
+    $("txToken").textContent = token;
+    $("txStatus").textContent = `Sent at ${new Date().toLocaleTimeString()} · ${(samples.length / ctx.sampleRate).toFixed(1)} s of audio`;
+  } catch (e) { $("txStatus").textContent = "⚠ " + e.message; }
+}
+
+$("sendBtn").onclick = sendToken;
+$("autoBtn").onclick = () => {
+  const on = !autoTimer;
+  if (on) { sendToken(); autoTimer = setInterval(sendToken, 10000); }
+  else { clearInterval(autoTimer); autoTimer = null; }
+  $("autoBtn").setAttribute("aria-pressed", on);
+  $("autoBtn").textContent = on ? "Stop auto" : "Auto every 10 s";
+};
+
+// ---------- Listen ----------
+$("listenBtn").onclick = async () => {
+  try {
+    ensureAudio();
+    if (!window.isSecureContext) throw new Error("Microphone needs HTTPS (or localhost).");
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: false }
+    });
+    const input = ctx.createMediaStreamSource(stream);
+    const proc = ctx.createScriptProcessor(1024, 1, 1);
+    proc.onaudioprocess = e => {
+      const chunk = new Float32Array(e.inputBuffer.getChannelData(0));
+      const res = ggwave.decode(instance, convertTypedArray(chunk, Int8Array));
+      if (res && res.length > 0) {
+        const text = new TextDecoder("utf-8").decode(res);
+        // Spike finding: ggwave can return corrupted bytes without an error (seen with *_FAST),
+        // so we sanity-check the shape of what we heard before trusting it.
+        const plausible = /^[A-Z0-9]{4,12}$/.test(text);
+        $("rxToken").textContent = plausible ? text : "??????";
+        $("rxStatus").textContent = plausible
+          ? `✅ Heard at ${new Date().toLocaleTimeString()}`
+          : `⚠ Heard something corrupted at ${new Date().toLocaleTimeString()} — ask for a resend`;
+        if (plausible && navigator.vibrate) navigator.vibrate(150);
+      }
+    };
+    input.connect(proc);
+    proc.connect(ctx.destination);
+    $("listenBtn").disabled = true;
+    $("listenBtn").textContent = "Listening…";
+    $("rxStatus").textContent = "Listening — press “Send” on the laptop.";
+  } catch (e) { $("rxStatus").textContent = "⚠ " + e.message; }
+};
+
+// ---------- Tabs ----------
+function showTab(rx) {
+  $("tx").classList.toggle("hidden", rx);
+  $("rx").classList.toggle("hidden", !rx);
+  $("tabTx").setAttribute("aria-pressed", !rx);
+  $("tabRx").setAttribute("aria-pressed", rx);
+}
+$("tabTx").onclick = () => showTab(false);
+$("tabRx").onclick = () => showTab(true);
+if (/Android|iPhone|iPad/i.test(navigator.userAgent)) showTab(true); // phones open in Listen mode
+
+// ---------- Test log (kept in this browser only) ----------
+const LOG_KEY = "soundSpikeLog";
+function loadLog() { try { return JSON.parse(localStorage.getItem(LOG_KEY)) || []; } catch { return []; } }
+function saveLog(rows) { try { localStorage.setItem(LOG_KEY, JSON.stringify(rows)); } catch {} }
+function renderLog() {
+  $("logBody").innerHTML = loadLog().map(r =>
+    `<tr><td>${r.time}</td><td>${r.device}</td><td>${r.protocol.replace("GGWAVE_PROTOCOL_", "")}</td><td>${r.distance}</td>` +
+    `<td class="${r.ok ? "ok" : "bad"}">${r.ok ? "OK" : "FAIL"}</td></tr>`).join("");
+}
+function addLog(ok) {
+  const rows = loadLog();
+  const esc = s => String(s).replace(/[<>&"]/g, "");
+  rows.push({ time: new Date().toLocaleTimeString(), device: esc($("device").value || "?"),
+              protocol: $("protocol").value, distance: $("distance").value, ok });
+  saveLog(rows); renderLog();
+}
+$("logOk").onclick = () => addLog(true);
+$("logFail").onclick = () => addLog(false);
+$("clearBtn").onclick = () => { if (confirm("Clear the whole log?")) { saveLog([]); renderLog(); } };
+$("csvBtn").onclick = () => {
+  const csv = ["time,device,protocol,distance_m,result",
+    ...loadLog().map(r => [r.time, r.device, r.protocol, r.distance, r.ok ? "OK" : "FAIL"].join(","))].join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "sound-spike-results.csv";
+  a.click();
+};
+renderLog();
+</script>
+</body>
+</html>
