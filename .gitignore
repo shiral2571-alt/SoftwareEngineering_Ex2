@@ -13,6 +13,10 @@ venv/
 .env
 *.db
 *.sqlite
+# Real class lists stay local; only the fictional sample roster is committed
+data/*.csv
+!data/sample_roster.csv
+.pytest_cache/
 
 # OS
 .DS_Store

@@ -1,0 +1,4 @@
+flask>=3.1
+openpyxl>=3.1
+anthropic>=2.8   # optional at runtime: only used when ANTHROPIC_API_KEY is set
+pytest>=9.0      # tests only

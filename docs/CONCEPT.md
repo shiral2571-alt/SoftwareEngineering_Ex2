@@ -54,10 +54,10 @@ The fallback is a **requirement**, not an afterthought — the live demo must ne
 | Need | Tool |
 |---|---|
 | Server, REST API | Python + Flask |
-| Real-time push of pulses / live dashboard | Flask-SocketIO |
+| Live dashboard / phones learn about pulses and polls | Short polling every 2–3 s (KISS; Flask-SocketIO was planned but polling works through the HTTPS tunnel with no extra moving parts) |
 | Storage | SQLite |
 | Encode/decode token as sound | ggwave (JS/WASM) |
-| Fallback QR | `qrcode` (Python) |
+| Fallback QR | `qrcode-generator` (JS, in the browser) |
 | Lecturer spreadsheet (online + offline) | Live dashboard + Excel/CSV export (`openpyxl`) |
 | HTTPS for microphone access in class | ngrok / Cloudflare Tunnel |
 | LLM features (video summary, homework review) | Claude API |
@@ -95,6 +95,13 @@ Spike page for these tests: `spike/sound-test/index.html` (has a built-in test l
 - The sound may still be faintly **audible from the laptop**, so "inaudible" is not yet established. To measure: find the lowest Volume that still decodes, and ask people in the room whether they hear it.
   → Ultrasound is the default (§6). Its range and how noticeable it is in a real classroom are still untested.
 - Still to test: longer distances, other phone models, a real wall test with a recorded protocol (see checklist above).
+
+### First test of the full app on a real phone (2026-11-10)
+- Registration, microphone and check-in worked end to end. ✅
+- Reception worked **only very close to the laptop**. App defaults were used: ultrasound, Volume 50. Exact distance and phone model were not recorded.
+  → Next: measure with Volume 100 and with Audible, and try the room's speakers (HDMI or projector audio) instead of the laptop speaker.
+- Switching to **Audible** in Settings: **received** ✅. Distance was not recorded, but it worked beyond the ultrasound's very short range.
+  → Working plan: Audible for check-in at the start of class; ultrasound for pulses only if it reaches far enough through the room's speakers; rotating QR as the fallback.
 
 ## 9. How the other features fit (scope reminder)
 1. **Attendance** – this concept (main feature).

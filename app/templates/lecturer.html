@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lecturer Dashboard</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="https://cdn.jsdelivr.net/npm/ggwave@0.4.0/ggwave.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="/static/sound.js"></script>
+</head>
+<body>
+{% if not authed %}
+<main>
+  <h1>🎓 Lecturer</h1>
+  <form class="card" method="post" action="/lecturer/login">
+    <label for="pin">Lecturer PIN (printed in the server window)</label>
+    <input id="pin" name="pin" type="password" inputmode="numeric" autofocus>
+    <button class="primary big" style="margin-top:12px">Enter</button>
+  </form>
+</main>
+{% else %}
+<main class="wide">
+  <div class="row">
+    <h1 class="grow">🎓 Lecturer Dashboard</h1>
+    <button id="joinQrBtn">📱 Join QR</button>
+    <a class="btn" href="/lecturer/export.xlsx">⬇ Excel</a>
+  </div>
+
+  <!-- Lecture controls -->
+  <section class="card">
+    <div id="noLecture" class="row">
+      <input id="lectureTitle" class="grow" placeholder="Lecture title, e.g. Lecture 5 – SOLID">
+      <button class="primary" id="startBtn">▶ Start lecture</button>
+    </div>
+    <div id="lectureBar" class="row hidden">
+      <div class="grow"><b id="lecName"></b> <span class="muted small" id="lecInfo"></span></div>
+      <button class="primary" id="checkinBtn">🔊 Start check-in sound</button>
+      <button id="pulseBtn">📡 Presence pulse now</button>
+      <button id="autoPulseBtn" aria-pressed="false">🎲 Random pulses: off</button>
+      <button id="rotQrBtn">🔲 QR check-in (fallback)</button>
+      <button id="endBtn">■ End</button>
+    </div>
+    <p id="soundStatus" class="muted small"></p>
+  </section>
+
+  <div id="pulseBanner" class="card hidden" style="text-align:center;background:var(--soft)">
+    <span class="pulse-dot"></span> <b>Presence check running</b> — keep the class page open on your phone · <span id="pulseLeft"></span>s
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-tab="sheet" aria-selected="true">📋 Attendance</button>
+    <button data-tab="engage">📊 Polls & comments</button>
+    <button data-tab="ai">🤖 AI tools</button>
+    <button data-tab="settings">⚙ Settings</button>
+  </div>
+
+  <!-- Online spreadsheet -->
+  <section id="tab-sheet" class="card">
+    <div class="row">
+      <div class="grow"><span class="stat" id="presentCount">0</span> <span class="muted">/ <span id="rosterCount">0</span> checked in</span></div>
+      <input id="filter" placeholder="Filter by name" style="max-width:240px">
+    </div>
+    <div style="overflow:auto;max-height:60vh;margin-top:8px">
+      <table>
+        <thead><tr><th>Name</th><th>ID</th><th>Status</th><th>Checked in</th><th>Method</th><th>Pulses</th><th></th></tr></thead>
+        <tbody id="sheetBody"><tr><td colspan="7" class="muted">Start a lecture to see attendance.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Polls & comments -->
+  <section id="tab-engage" class="grid hidden">
+    <div class="card">
+      <h2>📊 KISS poll</h2>
+      <input id="pollQ" placeholder="Question">
+      <div class="row" style="margin-top:6px">
+        <input class="grow" id="o1" value="Yes"><input class="grow" id="o2" value="No">
+        <input class="grow" id="o3" placeholder="(optional)"><input class="grow" id="o4" placeholder="(optional)">
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" id="pollBtn">Ask</button>
+        <button id="pollPulseBtn" title="Ask the poll and run a presence pulse at the same time">Ask + presence pulse</button>
+        <button id="pollCloseBtn">Close poll</button>
+      </div>
+      <div id="pollResults" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <h2>💬 Comments & suggestions</h2>
+      <div id="commentList" style="max-height:50vh;overflow:auto" class="muted">No comments yet.</div>
+    </div>
+  </section>
+
+  <!-- AI tools -->
+  <section id="tab-ai" class="grid hidden">
+    <div class="card">
+      <h2>🎬 Lecture summary</h2>
+      <p class="muted small">Upload the recording's transcript (.vtt / .srt / .txt — e.g. from auto-captions) or paste text.</p>
+      <input type="file" id="trFile" accept=".vtt,.srt,.txt">
+      <textarea id="trText" rows="4" placeholder="…or paste the transcript here" style="margin-top:6px"></textarea>
+      <button class="primary" id="sumBtn" style="margin-top:8px">Summarize</button>
+      <p class="muted small" id="sumEngine"></p>
+      <div id="sumOut" class="md"></div>
+    </div>
+    <div class="card">
+      <h2>📝 Homework review</h2>
+      <p class="muted small">Select all submissions at once (one file per student; the file name is used as the student label).</p>
+      <textarea id="hwTask" rows="2" placeholder="Assignment text (optional, improves the review)"></textarea>
+      <input type="file" id="hwFiles" multiple style="margin-top:6px">
+      <button class="primary" id="hwBtn" style="margin-top:8px">Review & compare</button>
+      <p class="muted small" id="hwEngine"></p>
+      <div id="hwOut"></div>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section id="tab-settings" class="grid hidden">
+    <div class="card">
+      <h2>🔊 Sound</h2>
+      <label for="protocol">Protocol</label>
+      <select id="protocol">
+        <option value="GGWAVE_PROTOCOL_ULTRASOUND_NORMAL" selected>Ultrasound – quiet (default)</option>
+        <option value="GGWAVE_PROTOCOL_AUDIBLE_NORMAL">Audible – most robust (use at pauses)</option>
+      </select>
+      <label for="volume">Volume (1–100)</label>
+      <input id="volume" type="number" min="1" max="100" value="50">
+      <button id="testSoundBtn" style="margin-top:8px">Play a test sound</button>
+    </div>
+    <div class="card">
+      <h2>👥 Course list</h2>
+      <p class="muted small">CSV with an ID column and a name column (e.g. <code>student_id,name</code>). Exported from Moodle or Excel — no integration needed.</p>
+      <input type="file" id="rosterFile" accept=".csv">
+      <button id="rosterBtn" style="margin-top:8px">Import</button>
+      <p id="rosterMsg" class="small"></p>
+      <p class="muted small">AI engine: <b id="llmName"></b></p>
+    </div>
+  </section>
+</main>
+
+<div id="overlay" class="overlay hidden" title="Click to close">
+  <b id="ovTitle" style="font-size:clamp(18px,3vw,36px)"></b>
+  <div id="ovQr"></div>
+  <div class="url" id="ovUrl"></div>
+  <small id="ovNote">Click anywhere to close</small>
+</div>
+
+<script>
+let state = {}, checkinOn = false, autoPulseTimers = [], rotQrTimer = null;
+const fmtTime = ts => ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+document.addEventListener("click", () => Sound.unlock(), { capture: true }); // audio needs one user gesture
+
+// ---------- tabs ----------
+$("tabs").querySelectorAll("button").forEach(b => b.onclick = () => {
+  $("tabs").querySelectorAll("button").forEach(x => x.setAttribute("aria-selected", x === b));
+  ["sheet", "engage", "ai", "settings"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== b.dataset.tab));
+});
+
+// ---------- lecture ----------
+$("startBtn").onclick = async () => { await api("/api/l/lecture", { title: $("lectureTitle").value }); refresh(); };
+$("endBtn").onclick = async () => {
+  if (!confirm("End this lecture? Attendance is kept and can be exported.")) return;
+  setCheckin(false); stopAutoPulses(); await api("/api/l/lecture/end", {}); refresh();
+};
+
+// ---------- sound broadcast: check-in window and pulses use the same loop ----------
+async function broadcastOnce() {
+  const r = await api("/api/l/token", { channel: "sound" });
+  if (!r.token) return;
+  try {
+    const secs = Sound.broadcast(r.token, $("protocol").value, Math.max(1, Math.min(100, +$("volume").value || 50)));
+    $("soundStatus").textContent = `🔊 Sent ${r.token} at ${new Date().toLocaleTimeString()} (${secs.toFixed(1)} s)`;
+  } catch (e) { $("soundStatus").textContent = "⚠ " + e.message; }
+}
+function setCheckin(on) {
+  checkinOn = on;
+  $("checkinBtn").textContent = on ? "⏸ Stop check-in sound" : "🔊 Start check-in sound";
+  if (on) broadcastOnce();
+}
+$("checkinBtn").onclick = () => setCheckin(!checkinOn);
+setInterval(() => { if (state.lecture && (checkinOn || state.pulse)) broadcastOnce(); }, 10000);
+
+async function pulseNow() {
+  await api("/api/l/pulse", {}); await refresh(); broadcastOnce();
+}
+$("pulseBtn").onclick = pulseNow;
+
+// Random pulses: N pulses at unpredictable times within the next hour.
+const PULSES_PER_HOUR = 3;
+function stopAutoPulses() {
+  autoPulseTimers.forEach(clearTimeout); autoPulseTimers = [];
+  $("autoPulseBtn").textContent = "🎲 Random pulses: off"; $("autoPulseBtn").setAttribute("aria-pressed", "false");
+}
+$("autoPulseBtn").onclick = () => {
+  if (autoPulseTimers.length) return stopAutoPulses();
+  const times = Array.from({ length: PULSES_PER_HOUR }, () => 5 + Math.random() * 55).sort((a, b) => a - b);
+  autoPulseTimers = times.map(min => setTimeout(pulseNow, min * 60000));
+  $("autoPulseBtn").textContent = `🎲 Random pulses: ${PULSES_PER_HOUR} in the next hour`;
+  $("autoPulseBtn").setAttribute("aria-pressed", "true");
+};
+$("testSoundBtn").onclick = () => { try { Sound.broadcast("TEST", $("protocol").value, +$("volume").value || 50); } catch (e) { alert(e.message); } };
+
+// ---------- QR overlays ----------
+const isLocal = () => /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+function showQr(title, url, note) {
+  const qr = qrcode(0, "M"); qr.addData(url); qr.make();
+  $("ovTitle").textContent = title; $("ovUrl").textContent = url; $("ovNote").textContent = note;
+  $("ovQr").innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+  $("overlay").classList.remove("hidden");
+}
+function localWarning() {
+  if (!isLocal()) return false;
+  alert("Phones can't open a localhost address. Open this dashboard through the https:// tunnel link and try again.");
+  return true;
+}
+$("joinQrBtn").onclick = () => { if (!localWarning()) showQr("Scan to open the class page", location.origin + "/", "Click anywhere to close"); };
+$("rotQrBtn").onclick = async () => {
+  if (localWarning()) return;
+  const show = async () => {
+    const r = await api("/api/l/token", { channel: "qr" });
+    if (r.token) showQr("Scan to check in", `${location.origin}/j/${r.token}`, "Changes every 15 s · click to close");
+  };
+  await show(); rotQrTimer = setInterval(show, 15000);
+};
+$("overlay").onclick = () => { $("overlay").classList.add("hidden"); clearInterval(rotQrTimer); rotQrTimer = null; };
+
+// ---------- live spreadsheet ----------
+const statusClass = { Present: "ok", Partial: "warn", Absent: "bad" };
+function renderSheet() {
+  const rows = state.rows || [], f = $("filter").value.trim().toLowerCase();
+  $("presentCount").textContent = rows.filter(r => r.checked_in).length;
+  $("rosterCount").textContent = state.roster_size;
+  if (!state.lecture) return;
+  $("sheetBody").innerHTML = rows.filter(r => !f || r.name.toLowerCase().includes(f)).map(r => `<tr>
+      <td>${esc(r.name)}${r.device_flag ? ' <span class="warn" title="Registered from more than one phone">⚠ device</span>' : ""}</td>
+      <td class="muted">${esc(r.student_id)}</td>
+      <td><span class="badge ${statusClass[r.status] || ""}">${esc(r.status)}</span></td>
+      <td>${fmtTime(r.checked_in_at)}</td><td>${esc(r.method)}</td>
+      <td>${r.pulses_heard}/${r.pulses_total}</td>
+      <td>${r.checked_in ? "" : `<button class="small" data-manual="${esc(r.student_id)}">✓ manual</button>`}
+          ${r.device_flag ? `<button class="small" data-reset="${esc(r.student_id)}">reset phone</button>` : ""}</td></tr>`).join("");
+  $("sheetBody").querySelectorAll("[data-manual]").forEach(b => b.onclick = async () => { await api("/api/l/manual", { student_id: b.dataset.manual }); refresh(); });
+  $("sheetBody").querySelectorAll("[data-reset]").forEach(b => b.onclick = async () => {
+    if (confirm("Forget all phones of this student? They will register again.")) { await api("/api/l/device-reset", { student_id: b.dataset.reset }); refresh(); }
+  });
+}
+$("filter").oninput = renderSheet;
+
+// ---------- polls & comments ----------
+async function askPoll(withPulse) {
+  const options = ["o1", "o2", "o3", "o4"].map(id => $(id).value.trim()).filter(Boolean);
+  const r = await api("/api/l/poll", { question: $("pollQ").value, options });
+  if (!r.ok) return alert(r.error);
+  if (withPulse) await pulseNow(); else refresh();
+}
+$("pollBtn").onclick = () => askPoll(false);
+$("pollPulseBtn").onclick = () => askPoll(true);
+$("pollCloseBtn").onclick = async () => { if (state.poll) { await api(`/api/l/poll/${state.poll.id}/close`, {}); refresh(); } };
+function renderEngage() {
+  const p = state.poll;
+  $("pollResults").innerHTML = !p ? '<p class="muted">No poll yet.</p>' :
+    `<b>${esc(p.question)}</b> <span class="muted small">${p.is_open ? "open" : "closed"} · ${p.total} votes</span>` +
+    p.options.map((o, i) => {
+      const pct = p.total ? Math.round(100 * p.counts[i] / p.total) : 0;
+      return `<div style="margin-top:6px"><div class="row"><span class="grow">${esc(o)}</span><b>${p.counts[i]}</b></div>
+              <div class="bar" style="width:${Math.max(pct, 1)}%"></div></div>`;
+    }).join("");
+  const cs = state.comments || [];
+  $("commentList").innerHTML = cs.length ? cs.map(c =>
+    `<div class="comment"><div class="small muted">${fmtTime(c.at)} · ${esc(c.author)}</div><div style="color:var(--fg)">${esc(c.text)}</div></div>`).join("")
+    : "No comments yet.";
+}
+
+// ---------- AI tools ----------
+$("sumBtn").onclick = async () => {
+  const fd = new FormData();
+  if ($("trFile").files[0]) fd.append("file", $("trFile").files[0]); else fd.append("text", $("trText").value);
+  $("sumOut").textContent = "Working…"; $("sumEngine").textContent = "";
+  const r = await api("/api/l/summary", fd);
+  if (!r.ok) { $("sumOut").textContent = "⚠ " + r.error; return; }
+  $("sumEngine").textContent = `Engine: ${r.engine}${r.note ? " · " + r.note : ""}`;
+  $("sumOut").textContent = r.summary;
+};
+$("hwBtn").onclick = async () => {
+  const fd = new FormData();
+  for (const f of $("hwFiles").files) fd.append("files", f);
+  fd.append("assignment", $("hwTask").value);
+  $("hwOut").textContent = "Working…"; $("hwEngine").textContent = "";
+  const r = await api("/api/l/homework", fd);
+  if (!r.ok) { $("hwOut").textContent = "⚠ " + r.error; return; }
+  $("hwEngine").textContent = `Engine: ${r.engine}${r.note ? " · " + r.note : ""}`;
+  const pairs = r.pairs.map(p => `<tr><td>${esc(p.a)}</td><td>${esc(p.b)}</td>
+      <td class="${p.similarity >= r.flag_threshold ? "bad" : ""}">${p.similarity}%${p.similarity >= r.flag_threshold ? " ⚠ check" : ""}</td></tr>`).join("");
+  $("hwOut").innerHTML =
+    (pairs ? `<h2 style="margin-top:12px">Similarity between students</h2><table><tr><th>Student</th><th>Student</th><th>Similarity</th></tr>${pairs}</table>
+      <p class="muted small">High similarity is a reason to look, not proof of copying.</p>` : "") +
+    (r.comparison ? `<h2>Class comparison</h2><div class="md">${esc(r.comparison)}</div>` : "") +
+    `<h2 style="margin-top:12px">Per student</h2>` +
+    Object.entries(r.reviews).map(([n, t]) => `<div class="comment"><b>${esc(n)}</b><div class="md small">${esc(t)}</div></div>`).join("");
+};
+
+// ---------- settings ----------
+$("rosterBtn").onclick = async () => {
+  const f = $("rosterFile").files[0]; if (!f) return;
+  const fd = new FormData(); fd.append("file", f);
+  const r = await api("/api/l/roster", fd);
+  $("rosterMsg").className = "small " + (r.ok ? "ok" : "bad");
+  $("rosterMsg").textContent = r.ok ? `Imported ${r.count} students.` : "⚠ " + r.error;
+  refresh();
+};
+
+// ---------- polling the server ----------
+async function refresh() {
+  state = await api("/api/l/state");
+  const L = state.lecture;
+  $("noLecture").classList.toggle("hidden", !!L);
+  $("lectureBar").classList.toggle("hidden", !L);
+  $("llmName").textContent = state.llm || "";
+  if (L) { $("lecName").textContent = L.title; $("lecInfo").textContent = "started " + fmtTime(L.started_at); }
+  $("pulseBanner").classList.toggle("hidden", !state.pulse);
+  if (state.pulse) $("pulseLeft").textContent = Math.max(0, state.pulse.seconds_left);
+  renderSheet(); renderEngage();
+}
+refresh();
+setInterval(refresh, 2000);
+</script>
+{% endif %}
+</body>
+</html>

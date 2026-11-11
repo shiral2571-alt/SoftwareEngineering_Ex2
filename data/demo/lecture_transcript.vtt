@@ -1,0 +1,29 @@
+WEBVTT
+
+1
+00:00:01.000 --> 00:00:09.000
+Good morning everyone. Today we are going to talk about the Open/Closed principle, one of the SOLID principles of object-oriented design.
+
+2
+00:00:09.500 --> 00:00:20.000
+The Open/Closed principle says that a class should be open for extension but closed for modification. In other words, you add new behaviour by adding new code, not by changing code that already works.
+
+3
+00:00:20.500 --> 00:00:33.000
+Let us look at an example. Imagine a payment class with a long if-else chain: if the payment is a credit card do this, if it is PayPal do that. Every new payment method forces us to modify the same class and test it again.
+
+4
+00:00:33.500 --> 00:00:47.000
+A better design is an interface called PaymentMethod with a method pay. Each payment method becomes its own class that implements the interface. Adding a new payment method means adding a new class, and the existing classes are not touched.
+
+5
+00:00:47.500 --> 00:01:00.000
+This is closely related to polymorphism. The code that uses the interface does not know which concrete class it is talking to, so the interface is the stable part and the concrete classes are the part that changes.
+
+6
+00:01:00.500 --> 00:01:12.000
+A common mistake is to over-apply the principle and add interfaces everywhere before they are needed. Remember KISS: add the abstraction when you see the second variation, not before.
+
+7
+00:01:12.500 --> 00:01:25.000
+For next week, please read the chapter about the Liskov substitution principle and think about how it limits the classes that implement an interface. We will also have a short quiz about SOLID.

@@ -1,0 +1,2 @@
+Homework 3: Write classes for shapes (circle, rectangle) and a function total_area(shapes).
+Use polymorphism so that adding a new shape does not require changing total_area.

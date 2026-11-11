@@ -6,6 +6,7 @@
 <title>Sound Attendance Spike</title>
 <!-- Spike / Proof of Concept for docs/CONCEPT.md: can a laptop speaker send a token to phones over sound? -->
 <script src="https://cdn.jsdelivr.net/npm/ggwave@0.4.0/ggwave.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <style>
   :root { --bg:#f6f7f9; --card:#fff; --fg:#1b1f24; --muted:#5b6470; --accent:#2f6fde; --ok:#1f8a4c; --bad:#c23b3b; --line:#dde1e6; }
   @media (prefers-color-scheme: dark) {
@@ -32,6 +33,11 @@
   th, td { text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); }
   .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
   .hidden { display:none; }
+  #qrOverlay { position:fixed; inset:0; background:#fff; color:#000; display:flex; flex-direction:column;
+               align-items:center; justify-content:center; gap:16px; padding:16px; z-index:10; cursor:pointer; text-align:center; }
+  #qrOverlay.hidden { display:none; } /* the id rule above would otherwise beat .hidden */
+  #qrOverlay svg { width:min(80vw, 70vh); height:auto; }
+  #qrOverlay .url { font:600 clamp(14px, 2.5vw, 28px)/1.3 ui-monospace, Consolas, monospace; word-break:break-all; }
 </style>
 </head>
 <body>
@@ -62,7 +68,15 @@
       <button id="autoBtn" aria-pressed="false">Auto every 10 s</button>
     </div>
     <p class="status" id="txStatus"></p>
+    <button id="qrBtn" style="width:100%">📱 Show QR for phones (projector)</button>
   </section>
+
+  <div id="qrOverlay" class="hidden" title="Click to close">
+    <b style="font-size:clamp(18px,3vw,36px)">Scan to join</b>
+    <div id="qrBox"></div>
+    <div class="url" id="qrUrl"></div>
+    <small>Click anywhere to close</small>
+  </div>
 
   <!-- ===== Listen (student phone) ===== -->
   <section id="rx" class="card hidden">
@@ -191,6 +205,22 @@ $("listenBtn").onclick = async () => {
     $("rxStatus").textContent = "Listening — press “Send” on the laptop.";
   } catch (e) { $("rxStatus").textContent = "⚠ " + e.message; }
 };
+
+// ---------- QR for the projector (no need to send a link) ----------
+$("qrBtn").onclick = () => {
+  const url = location.origin + location.pathname;
+  if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
+    $("txStatus").textContent = "⚠ Phones can't open a localhost address. Open this page on the laptop through the https:// tunnel link, then press this button again.";
+    return;
+  }
+  const qr = qrcode(0, "M");
+  qr.addData(url);
+  qr.make();
+  $("qrBox").innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+  $("qrUrl").textContent = url;
+  $("qrOverlay").classList.remove("hidden");
+};
+$("qrOverlay").onclick = () => $("qrOverlay").classList.add("hidden");
 
 // ---------- Tabs ----------
 function showTab(rx) {

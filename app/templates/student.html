@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Class Check-in</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="https://cdn.jsdelivr.net/npm/ggwave@0.4.0/ggwave.js"></script>
+<script src="/static/sound.js"></script>
+</head>
+<body>
+<main>
+  <h1>🎓 Class Check-in</h1>
+
+  <!-- 1. One-time registration: name from the course list + last 4 digits -->
+  <section id="registerCard" class="card hidden">
+    <h2>Who are you?</h2>
+    <p class="muted small">Only once on this phone. Afterwards you just open the page.</p>
+    <label for="name">Your name (start typing)</label>
+    <input id="name" list="names" autocomplete="off">
+    <datalist id="names"></datalist>
+    <label for="last4">Last 4 digits of your student ID</label>
+    <input id="last4" inputmode="numeric" maxlength="4" pattern="\d{4}">
+    <p id="regMsg" class="bad small"></p>
+    <button class="primary big" id="regBtn">Save</button>
+  </section>
+
+  <!-- 2. Lecture screen -->
+  <section id="mainCard" class="hidden">
+    <div class="card">
+      <div class="row"><div class="grow">Hi <b id="who"></b></div><span id="lectureTitle" class="muted small"></span></div>
+      <div id="statusLine" class="big-status muted">No lecture right now</div>
+      <button class="primary big" id="joinBtn">🎤 Join class</button>
+      <p id="listenMsg" class="muted small" style="text-align:center"></p>
+      <p id="pulseInfo" class="small" style="text-align:center"></p>
+    </div>
+
+    <div id="pollCard" class="card hidden">
+      <h2>📊 <span id="pollQ"></span></h2>
+      <div id="pollOpts"></div>
+      <p id="pollMsg" class="ok small"></p>
+    </div>
+
+    <div class="card">
+      <h2>💬 Comment or suggestion</h2>
+      <textarea id="commentText" rows="2" maxlength="500" placeholder="A question, a suggestion, “slower please”…"></textarea>
+      <label class="row" style="color:var(--fg)"><input type="checkbox" id="anon" style="width:auto"> Send anonymously</label>
+      <button id="commentBtn" style="width:100%">Send</button>
+    </div>
+  </section>
+</main>
+
+<script>
+let me = null, listening = false, lastSent = {}, wakeLock = null;
+
+function toast(text) {
+  const t = document.createElement("div");
+  t.className = "toast"; t.textContent = text;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
+}
+
+// ---------- registration ----------
+async function showRegister() {
+  $("registerCard").classList.remove("hidden");
+  const names = await api("/api/roster/names");
+  $("names").innerHTML = names.map(n => `<option value="${esc(n)}">`).join("");
+}
+$("regBtn").onclick = async () => {
+  const r = await api("/api/register", { name: $("name").value, last4: $("last4").value });
+  if (!r.ok) { $("regMsg").textContent = r.error || "Something went wrong"; return; }
+  $("registerCard").classList.add("hidden");
+  refresh();
+};
+
+// ---------- listening (presence by sound) ----------
+$("joinBtn").onclick = async () => {
+  try {
+    await Sound.ready;
+    await Sound.listen(onToken);
+    listening = true;
+    $("joinBtn").classList.add("hidden");
+    $("listenMsg").textContent = "🎧 Listening… keep this page open during the lecture.";
+    try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+  } catch (e) { $("listenMsg").textContent = "⚠ " + e.message; }
+};
+
+async function onToken(token) {
+  const now = Date.now();
+  if (lastSent[token] && now - lastSent[token] < 15000) return; // same broadcast heard twice
+  lastSent[token] = now;
+  const r = await api("/api/heard", { token });
+  if (r.ok) { navigator.vibrate?.(150); toast("✅ " + r.message); refresh(); }
+}
+
+// Screen lock or app switch stops the microphone — say so instead of failing silently.
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible" && listening) {
+    try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+    refresh();
+  }
+});
+
+// ---------- state ----------
+function render(s) {
+  $("who").textContent = s.name;
+  const L = s.lecture;
+  $("lectureTitle").textContent = L ? L.title : "";
+  if (!L) {
+    $("statusLine").className = "big-status muted"; $("statusLine").textContent = "No lecture right now";
+    $("pulseInfo").textContent = ""; $("pollCard").classList.add("hidden"); return;
+  }
+  if (!listening) $("joinBtn").textContent = L.checked_in ? "🎤 Stay on for presence checks" : "🎤 Join class";
+  $("statusLine").className = "big-status " + (L.checked_in ? "ok" : "muted");
+  $("statusLine").textContent = L.checked_in ? "✅ You're checked in" : (listening ? "Waiting for the class sound…" : "Tap “Join class”");
+  $("pulseInfo").innerHTML = L.pulse_active
+    ? `<span class="pulse-dot"></span> Presence check running — keep the page open`
+    : (L.pulses_total ? `Presence checks: ${L.pulses_heard}/${L.pulses_total}` : "");
+
+  const p = s.poll;
+  $("pollCard").classList.toggle("hidden", !p);
+  if (p && $("pollCard").dataset.id != p.id + ":" + p.voted) {
+    $("pollCard").dataset.id = p.id + ":" + p.voted;
+    $("pollQ").textContent = p.question;
+    $("pollMsg").textContent = p.voted ? "Thanks, your vote was counted." : "";
+    $("pollOpts").innerHTML = p.voted ? "" : p.options.map((o, i) =>
+      `<button class="opt" data-i="${i}">${esc(o)}</button>`).join("");
+    $("pollOpts").querySelectorAll("button").forEach(b => b.onclick = async () => {
+      await api("/api/vote", { poll_id: p.id, option: +b.dataset.i }); refresh();
+    });
+  }
+}
+
+async function refresh() {
+  const s = await api("/api/me");
+  if (!s.registered) { $("mainCard").classList.add("hidden"); if ($("registerCard").classList.contains("hidden")) showRegister(); return; }
+  $("mainCard").classList.remove("hidden");
+  render(s);
+}
+
+$("commentBtn").onclick = async () => {
+  const text = $("commentText").value.trim();
+  if (!text) return;
+  const r = await api("/api/comment", { text, anonymous: $("anon").checked });
+  if (r.ok) { $("commentText").value = ""; toast("Sent — thank you!"); } else toast("⚠ " + (r.error || "Not sent"));
+};
+
+const q = new URLSearchParams(location.search).get("qr");
+if (q) { toast(q === "ok" ? "✅ Checked in by QR" : "⚠ That QR code expired — scan the new one"); history.replaceState(null, "", "/"); }
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
