@@ -1,6 +1,6 @@
 # Ex2 — One-Week Schedule
 
-Working deadline: **Sunday 2026-11-15** (submission "in one week" from 2026-11-08; confirm the exact date and the class-demo date).
+Deadline: **2026-11-25** (from the assignment Q&A, read 2026-11-13). The day-by-day plan below was written for the earlier working date of 2026-11-15 and should be re-planned.
 Numbers in brackets refer to the assignment's To-Do list.
 
 | Day | Date | Work | To-Do | Done when |

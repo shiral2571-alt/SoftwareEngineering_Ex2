@@ -18,7 +18,7 @@ as random **presence pulses**, so attendance measures *being there*, not just *a
 ## 3. Idea 1 — Acoustic check-in ("data over sound")
 - The lecturer presses **Start class**; the laptop emits a short sound (≈1 s) that encodes a one-time token.
 - Students open the web app on their phones, tap **Join class** (required by iOS to enable the microphone),
-  and the phone decodes the token and sends it to the server together with the student's ID.
+  and the phone decodes the token and sends it to the server; the server knows who the phone belongs to (§5a).
 - Sound does not travel over WhatsApp in real time and fades with distance, so only people **physically in the room** can catch a valid token.
 - **Library (compose, don't write):** [`ggwave`](https://github.com/ggerganov/ggwave) — MIT license,
   JavaScript/WebAssembly build that runs in the mobile browser; supports both *audible* and *ultrasound* protocols.
@@ -36,8 +36,18 @@ as random **presence pulses**, so attendance measures *being there*, not just *a
 |---|---|
 | Recording the sound and replaying it to a friend later | Token is **one-time** and **short-lived** (TTL ≈ 20 s, to be tuned in tests) |
 | Opening the site from home | Server accepts only tokens it just broadcast; no sound → no token |
-| One phone registering several students | One device ↔ one student per lecture (device fingerprint / session cookie) |
+| One phone registering several students | One phone ↔ one name; a phone that already checked someone in cannot switch names in that lecture |
+| Taking a friend's name | The first phone owns the name; the real student is refused, complains, and the lecturer presses **reset phone** |
 | Check-in and leave | Random pulses during the lecture (Idea 2) |
+
+### 5a. Identity without ID numbers (decided 2026-11-13)
+The lecturer's student list has **names only**: ID numbers were removed for privacy (assignment Q&A #6).
+- The student picks their name from the list once. The server issues a random device token in an HttpOnly cookie.
+- **One name ↔ one phone.** The first phone to pick a name owns it, and another phone picking the same name is refused.
+  Picking a different name on the same phone releases the old name, so a typo doesn't lock anyone out.
+- The lecturer sees which names have a phone (📱) and can **reset** a name, for example a new phone or a name someone else took.
+- Accepted weakness: a student could claim a friend's name *before* the friend does. This is detected the moment the friend tries,
+  and it still needs a phone in the room to hear the sound. A stronger check, such as a code sent to the university e-mail, is Future Work.
 
 ## 6. Fallback (graceful degradation)
 Sound may fail (weak laptop speakers, noisy room, a phone mic that filters high frequencies).

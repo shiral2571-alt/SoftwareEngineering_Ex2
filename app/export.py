@@ -38,7 +38,7 @@ class ExcelExporter:
         students, lectures = self.roster.all(), self.attendance.lectures()
 
         # Overview: students x lectures
-        header = ["Student ID", "Name"] + [f"#{l['id']} {l['title']}" for l in lectures] + ["Present", "Rate"]
+        header = ["Key", "Name"] + [f"#{l['id']} {l['title']}" for l in lectures] + ["Present", "Rate"]
         rows = []
         for s in students:
             statuses = [self.attendance.student_summary(l["id"], s.student_id)["status"] for l in lectures]
@@ -58,9 +58,9 @@ class ExcelExporter:
                 sm = self.attendance.student_summary(l["id"], s.student_id)
                 rows.append([s.student_id, s.name, sm["status"], _fmt(sm["checked_in_at"]), sm["method"],
                              f"{sm['pulses_heard']}/{sm['pulses_total']}",
-                             "yes" if self.devices.device_count(s.student_id) > 1 else ""])
+                             "yes" if self.devices.is_registered(s.student_id) else ""])
             ws = _sheet(wb, f"L{l['id']} {l['title']}",
-                        ["Student ID", "Name", "Status", "Checked in", "Method", "Pulses", "Device changed"], rows)
+                        ["Key", "Name", "Status", "Checked in", "Method", "Pulses", "Phone registered"], rows)
             for row in ws.iter_rows(min_row=2, min_col=3, max_col=3):
                 for c in row:
                     if c.value in STATUS_FILL:

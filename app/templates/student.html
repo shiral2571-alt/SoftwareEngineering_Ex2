@@ -15,12 +15,10 @@
   <!-- 1. One-time registration: name from the course list + last 4 digits -->
   <section id="registerCard" class="card hidden">
     <h2>Who are you?</h2>
-    <p class="muted small">Only once on this phone. Afterwards you just open the page.</p>
+    <p class="muted small">Only once on this phone. Your name stays linked to this phone — pick only your own.</p>
     <label for="name">Your name (start typing)</label>
     <input id="name" list="names" autocomplete="off">
     <datalist id="names"></datalist>
-    <label for="last4">Last 4 digits of your student ID</label>
-    <input id="last4" inputmode="numeric" maxlength="4" pattern="\d{4}">
     <p id="regMsg" class="bad small"></p>
     <button class="primary big" id="regBtn">Save</button>
   </section>
@@ -66,7 +64,9 @@ async function showRegister() {
   $("names").innerHTML = names.map(n => `<option value="${esc(n)}">`).join("");
 }
 $("regBtn").onclick = async () => {
-  const r = await api("/api/register", { name: $("name").value, last4: $("last4").value });
+  if (!$("name").value.trim()) return;
+  if (!confirm(`Register this phone as “${$("name").value.trim()}”?`)) return;
+  const r = await api("/api/register", { name: $("name").value });
   if (!r.ok) { $("regMsg").textContent = r.error || "Something went wrong"; return; }
   $("registerCard").classList.add("hidden");
   refresh();

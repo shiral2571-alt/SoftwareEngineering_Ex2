@@ -77,16 +77,18 @@ def create_app(db_path: str = "teaching_tool.db", lecturer_pin: str | None = Non
 
     @app.post("/api/register")
     def register():
-        data = request.get_json(force=True)
-        student = roster.verify(data.get("name", ""), data.get("last4", ""))
+        student = roster.find_by_name(request.get_json(force=True).get("name", ""))
         if student is None:
-            return jsonify(ok=False, error="Name and last 4 digits don't match the course list"), 400
+            return jsonify(ok=False, error="Choose your name from the list"), 400
         old = current_student()
         lec = attendance.current_lecture()
         if old and old != student and lec and attendance.student_summary(lec["id"], old.student_id)["checked_in"]:
             return jsonify(ok=False, error=f"This phone already checked in {old.name} in this lecture"), 409
+        claim = devices.claim(student, request.cookies.get(DEVICE_COOKIE))
+        if not claim.ok:
+            return jsonify(ok=False, error=claim.error), 409
         resp = jsonify(ok=True, name=student.name)
-        resp.set_cookie(DEVICE_COOKIE, devices.bind(student), max_age=DEVICE_COOKIE_AGE, httponly=True,
+        resp.set_cookie(DEVICE_COOKIE, claim.device_token, max_age=DEVICE_COOKIE_AGE, httponly=True,
                         samesite="Lax", secure=request.headers.get("X-Forwarded-Proto") == "https")
         pending = session.pop("pending_token", None)
         if pending:  # the student arrived by scanning the rotating QR before registering
@@ -223,7 +225,7 @@ def create_app(db_path: str = "teaching_tool.db", lecturer_pin: str | None = Non
             for s in roster.all():
                 sm = attendance.student_summary(lec["id"], s.student_id)
                 rows.append({"student_id": s.student_id, "name": s.name, **sm,
-                             "device_flag": devices.device_count(s.student_id) > 1})
+                             "registered": devices.is_registered(s.student_id)})
             pulse = attendance.active_pulse(lec["id"])
             state.update(
                 lecture={"id": lec["id"], "title": lec["title"], "started_at": lec["started_at"]},

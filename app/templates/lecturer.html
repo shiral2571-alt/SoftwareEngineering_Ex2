@@ -63,7 +63,7 @@
     </div>
     <div style="overflow:auto;max-height:60vh;margin-top:8px">
       <table>
-        <thead><tr><th>Name</th><th>ID</th><th>Status</th><th>Checked in</th><th>Method</th><th>Pulses</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Phone</th><th>Status</th><th>Checked in</th><th>Method</th><th>Pulses</th><th></th></tr></thead>
         <tbody id="sheetBody"><tr><td colspan="7" class="muted">Start a lecture to see attendance.</td></tr></tbody>
       </table>
     </div>
@@ -128,7 +128,7 @@
     </div>
     <div class="card">
       <h2>👥 Course list</h2>
-      <p class="muted small">CSV with an ID column and a name column (e.g. <code>student_id,name</code>). Exported from Moodle or Excel — no integration needed.</p>
+      <p class="muted small">CSV with a <code>name</code> column (or <code>first name</code> + <code>last name</code>). No ID numbers needed. Exported from Moodle or Excel — no integration needed.</p>
       <input type="file" id="rosterFile" accept=".csv">
       <button id="rosterBtn" style="margin-top:8px">Import</button>
       <p id="rosterMsg" class="small"></p>
@@ -231,16 +231,16 @@ function renderSheet() {
   $("rosterCount").textContent = state.roster_size;
   if (!state.lecture) return;
   $("sheetBody").innerHTML = rows.filter(r => !f || r.name.toLowerCase().includes(f)).map(r => `<tr>
-      <td>${esc(r.name)}${r.device_flag ? ' <span class="warn" title="Registered from more than one phone">⚠ device</span>' : ""}</td>
-      <td class="muted">${esc(r.student_id)}</td>
+      <td>${esc(r.name)}</td>
+      <td title="${r.registered ? "A phone is linked to this name" : "No phone linked yet"}">${r.registered ? "📱" : '<span class="muted">—</span>'}</td>
       <td><span class="badge ${statusClass[r.status] || ""}">${esc(r.status)}</span></td>
       <td>${fmtTime(r.checked_in_at)}</td><td>${esc(r.method)}</td>
       <td>${r.pulses_heard}/${r.pulses_total}</td>
       <td>${r.checked_in ? "" : `<button class="small" data-manual="${esc(r.student_id)}">✓ manual</button>`}
-          ${r.device_flag ? `<button class="small" data-reset="${esc(r.student_id)}">reset phone</button>` : ""}</td></tr>`).join("");
+          ${r.registered ? `<button class="small" data-reset="${esc(r.student_id)}" title="Use when someone else took this name or the student changed phone">reset phone</button>` : ""}</td></tr>`).join("");
   $("sheetBody").querySelectorAll("[data-manual]").forEach(b => b.onclick = async () => { await api("/api/l/manual", { student_id: b.dataset.manual }); refresh(); });
   $("sheetBody").querySelectorAll("[data-reset]").forEach(b => b.onclick = async () => {
-    if (confirm("Forget all phones of this student? They will register again.")) { await api("/api/l/device-reset", { student_id: b.dataset.reset }); refresh(); }
+    if (confirm("Free this name? The student will pick it again on their own phone.")) { await api("/api/l/device-reset", { student_id: b.dataset.reset }); refresh(); }
   });
 }
 $("filter").oninput = renderSheet;

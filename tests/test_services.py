@@ -7,9 +7,10 @@ from app.attendance import PULSE_WINDOW, SOUND_TOKEN_TTL, TOKEN_ALPHABET, TOKEN_
 from app.engagement import CommentService, PollService
 from app.export import ExcelExporter
 from app.identity import DeviceRegistry
-from app.roster import CourseRoster, CsvRosterSource, Student
+from app.roster import CourseRoster, CsvRosterSource, Student, key_for_name
 
-ROSTER_CSV = "student_id,name\n203456781,Noa Levi\n204567812,Daniel Cohen\n"
+ROSTER_CSV = "name\nNoa Levi\nDaniel Cohen\n"  # like the real list: names only
+NOA, DAN = key_for_name("Noa Levi"), key_for_name("Daniel Cohen")
 
 
 class FakeClock:
@@ -34,34 +35,55 @@ def env():
 
 
 # ---------------- Roster & identity ----------------
-def test_csv_roster_accepts_bom_and_alternative_headers():
-    students = CsvRosterSource("﻿ID,Full Name\n1234,A B\n,missing id\n").load()
-    assert students == [Student("1234", "A B")]
+def test_names_only_csv_gets_stable_keys():
+    students = CsvRosterSource("﻿Name\nNoa  Levi\n\n").load()
+    assert [s.name for s in students] == ["Noa Levi"]
+    assert students[0].student_id == key_for_name("noa levi")  # same key on re-import
 
 
-def test_csv_roster_without_name_column_is_rejected():
+def test_csv_first_and_last_name_columns():
+    assert CsvRosterSource("First Name,Last Name\nNoa,Levi\n").load()[0].name == "Noa Levi"
+
+
+def test_csv_optional_id_column_is_kept():
+    assert CsvRosterSource("ID,Full Name\n1234,A B\n").load() == [Student("1234", "A B")]
+
+
+def test_csv_without_name_column_or_with_duplicates_is_rejected():
     with pytest.raises(ValueError):
         CsvRosterSource("id,email\n1,a@b.c\n").load()
+    with pytest.raises(ValueError):
+        CsvRosterSource("name\nNoa Levi\nnoa levi\n").load()
 
 
-def test_verify_needs_matching_name_and_last4(env):
+def test_find_by_name_ignores_case_and_spaces(env):
     r = env["roster"]
-    assert r.verify("noa levi", "6781").student_id == "203456781"
-    assert r.verify("Noa Levi", "0000") is None
-    assert r.verify("Noa Levi", "781") is None
-    assert r.verify("Daniel Cohen", "6781") is None
+    assert r.find_by_name("  noa   LEVI ").name == "Noa Levi"
+    assert r.find_by_name("Noa") is None
 
 
-def test_device_binding_and_flag(env):
-    d, noa = env["devices"], env["roster"].get("203456781")
-    t1 = d.bind(noa)
-    assert d.student_for(t1) == noa
+def test_first_phone_owns_the_name(env):
+    d, noa = env["devices"], env["roster"].find_by_name("Noa Levi")
+    first = d.claim(noa)
+    assert first.ok and d.student_for(first.device_token) == noa
+    assert d.claim(noa, first.device_token).device_token == first.device_token  # same phone again: fine
+    assert not d.claim(noa, "other-phone").ok                                   # someone else: refused
     assert d.student_for("forged") is None and d.student_for(None) is None
-    assert d.device_count(noa.student_id) == 1
-    d.bind(noa)
-    assert d.device_count(noa.student_id) == 2  # shown to the lecturer as "device changed"
+
+
+def test_switching_name_releases_the_old_one(env):
+    d, r = env["devices"], env["roster"]
+    noa, dan = r.find_by_name("Noa Levi"), r.find_by_name("Daniel Cohen")
+    tok = d.claim(noa).device_token
+    d.claim(dan, tok)  # picked the wrong name first, then corrected it
+    assert not d.is_registered(noa.student_id) and d.claim(noa).ok
+
+
+def test_lecturer_reset_frees_the_name(env):
+    d, noa = env["devices"], env["roster"].find_by_name("Noa Levi")
+    tok = d.claim(noa).device_token
     d.reset(noa.student_id)
-    assert d.student_for(t1) is None
+    assert d.student_for(tok) is None and d.claim(noa, "real-noa-phone").ok
 
 
 # ---------------- Tokens & check-in ----------------
@@ -75,9 +97,9 @@ def test_valid_token_checks_in_once(env):
     att = env["att"]
     lec = att.start_lecture("L1")
     tok = att.issue_token(lec)
-    assert att.heard("203456781", tok).message == "Checked in"
-    assert att.heard("203456781", tok).message == "Already checked in"
-    s = att.student_summary(lec, "203456781")
+    assert att.heard(NOA, tok).message == "Checked in"
+    assert att.heard(NOA, tok).message == "Already checked in"
+    s = att.student_summary(lec, NOA)
     assert s["checked_in"] and s["method"] == "sound"
 
 
@@ -86,16 +108,16 @@ def test_expired_token_is_rejected(env):
     lec = att.start_lecture("L1")
     tok = att.issue_token(lec)
     clock.advance(SOUND_TOKEN_TTL + 1)  # e.g. a recording replayed to a friend later
-    res = att.heard("203456781", tok)
+    res = att.heard(NOA, tok)
     assert not res.ok and res.message == "Code expired"
-    assert not att.student_summary(lec, "203456781")["checked_in"]
+    assert not att.student_summary(lec, NOA)["checked_in"]
 
 
 def test_unknown_and_lowercase_tokens(env):
     att = env["att"]
     lec = att.start_lecture("L1")
-    assert not att.heard("203456781", "ZZZZZZ").ok
-    assert att.heard("203456781", att.issue_token(lec).lower()).ok
+    assert not att.heard(NOA, "ZZZZZZ").ok
+    assert att.heard(NOA, att.issue_token(lec).lower()).ok
 
 
 def test_token_from_previous_lecture_is_rejected(env):
@@ -103,35 +125,35 @@ def test_token_from_previous_lecture_is_rejected(env):
     old = att.start_lecture("L1")
     tok = att.issue_token(old)
     att.start_lecture("L2")  # ends L1
-    assert not att.heard("203456781", tok).ok
+    assert not att.heard(NOA, tok).ok
 
 
 def test_qr_channel_is_recorded(env):
     att = env["att"]
     lec = att.start_lecture("L1")
-    att.heard("203456781", att.issue_token(lec, "qr"))
-    assert att.student_summary(lec, "203456781")["method"] == "qr"
+    att.heard(NOA, att.issue_token(lec, "qr"))
+    assert att.student_summary(lec, NOA)["method"] == "qr"
 
 
 def test_manual_check_in(env):
     att = env["att"]
     lec = att.start_lecture("L1")
-    att.manual_check_in(lec, "204567812")
-    assert att.student_summary(lec, "204567812")["method"] == "manual"
+    att.manual_check_in(lec, DAN)
+    assert att.student_summary(lec, DAN)["method"] == "manual"
 
 
 # ---------------- Pulses ----------------
 def test_pulse_token_counts_for_pulse(env):
     att, clock = env["att"], env["clock"]
     lec = att.start_lecture("L1")
-    att.heard("203456781", att.issue_token(lec))
+    att.heard(NOA, att.issue_token(lec))
     pulse = att.start_pulse(lec)
-    res = att.heard("203456781", att.issue_token(lec))
-    assert res.kind == "pulse" and att.heard_pulse(pulse, "203456781")
+    res = att.heard(NOA, att.issue_token(lec))
+    assert res.kind == "pulse" and att.heard_pulse(pulse, NOA)
     clock.advance(PULSE_WINDOW + 1)
     assert att.active_pulse(lec) is None
     att.start_pulse(lec)  # Noa misses the second pulse
-    s = att.student_summary(lec, "203456781")
+    s = att.student_summary(lec, NOA)
     assert (s["pulses_heard"], s["pulses_total"]) == (1, 2)
 
 
@@ -139,8 +161,8 @@ def test_hearing_a_pulse_also_checks_in_late_arrival(env):
     att = env["att"]
     lec = att.start_lecture("L1")
     att.start_pulse(lec)
-    att.heard("204567812", att.issue_token(lec))
-    assert att.student_summary(lec, "204567812")["checked_in"]
+    att.heard(DAN, att.issue_token(lec))
+    assert att.student_summary(lec, DAN)["checked_in"]
 
 
 def test_attendance_status_without_pulses():
@@ -155,12 +177,12 @@ def test_poll_vote_once_and_counts(env):
     p, att = env["polls"], env["att"]
     lec = att.start_lecture("L1")
     pid = p.create(lec, "Clear?", ["Yes", "No", ""])
-    assert p.vote(pid, "203456781", 0)
-    assert not p.vote(pid, "203456781", 1)  # second vote ignored
-    assert not p.vote(pid, "204567812", 5)  # no such option
+    assert p.vote(pid, NOA, 0)
+    assert not p.vote(pid, NOA, 1)  # second vote ignored
+    assert not p.vote(pid, DAN, 5)  # no such option
     assert p.open_poll(lec)["counts"] == [1, 0]
     p.close(pid)
-    assert p.open_poll(lec) is None and not p.vote(pid, "204567812", 1)
+    assert p.open_poll(lec) is None and not p.vote(pid, DAN, 1)
 
 
 def test_poll_validation_and_one_open_poll(env):
@@ -169,17 +191,17 @@ def test_poll_validation_and_one_open_poll(env):
         p.create(lec, "Only one option?", ["Yes"])
     first = p.create(lec, "Q1", ["a", "b"])
     p.create(lec, "Q2", ["a", "b"])
-    assert p.open_poll(lec)["question"] == "Q2" and not p.vote(first, "203456781", 0)
+    assert p.open_poll(lec)["question"] == "Q2" and not p.vote(first, NOA, 0)
 
 
 def test_anonymous_comment_hides_name(env):
     c, lec = env["comments"], env["att"].start_lecture("L1")
-    c.add(lec, "203456781", "Slower please", anonymous=True)
-    c.add(lec, "204567812", "Great example", anonymous=False)
+    c.add(lec, NOA, "Slower please", anonymous=True)
+    c.add(lec, DAN, "Great example", anonymous=False)
     authors = [x["author"] for x in c.for_lecture(lec)]
     assert authors == ["Daniel Cohen", "Anonymous"]
     with pytest.raises(ValueError):
-        c.add(lec, "203456781", "   ", anonymous=False)
+        c.add(lec, NOA, "   ", anonymous=False)
 
 
 # ---------------- Export ----------------
@@ -188,7 +210,7 @@ def test_excel_export_has_expected_sheets(env):
     import io
     att = env["att"]
     lec = att.start_lecture("Intro")
-    att.heard("203456781", att.issue_token(lec))
+    att.heard(NOA, att.issue_token(lec))
     data = ExcelExporter(env["roster"], att, env["devices"], env["polls"], env["comments"]).build()
     wb = load_workbook(io.BytesIO(data))
     assert wb.sheetnames == ["Overview", f"L{lec} Intro", "Polls", "Comments"]

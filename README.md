@@ -21,7 +21,7 @@ Full concept: [docs/CONCEPT.md](docs/CONCEPT.md).
 | 4 | ML summary of class video | Upload the recording's transcript (.vtt/.srt/.txt) → Claude summary (offline extractive summary without an API key) |
 | 5 | LLM homework review | Upload submissions → per-student review, class comparison and a similarity table |
 
-**Out of scope:** Moodle/Zoom integration and personal data beyond name + student ID. The roster is a CSV file that can be exported from Moodle.
+**Out of scope:** Moodle/Zoom integration and personal data beyond the student's name (the lecturer's list has no ID numbers). The roster is a CSV file of names that can be exported from Moodle.
 Video-to-text transcription is also out of scope: we use the transcript the recording platform already produces.
 
 ## Run it
@@ -42,7 +42,7 @@ Optional: set `ANTHROPIC_API_KEY` to get Claude summaries and reviews. Without i
 
 ## Demo script (10 min)
 1. **Settings:** import the course CSV, or keep the fictional `data/sample_roster.csv`.
-2. **Start lecture.** Press **📱 Join QR** on the projector so students scan it, pick their name and enter the last 4 ID digits (once per phone).
+2. **Start lecture.** Press **📱 Join QR** on the projector so students scan it, and pick their name (once per phone; the first phone to pick a name owns it, and **reset phone** frees it).
 3. Students tap **Join class**. You press **🔊 Start check-in sound**, and the sheet fills up live.
 4. Show the fallback: **🔲 QR check-in** (rotates every 15 s) and **✓ manual**.
 5. Press **📡 Presence pulse now**. The projector banner appears, and the *Pulses* column goes up only for phones that are still in the room.
@@ -61,7 +61,7 @@ py -m pytest -q
 ```
 app/
   roster.py       RosterSource (interface) · CsvRosterSource · CourseRoster
-  identity.py     DeviceRegistry: phone ↔ student binding (HttpOnly cookie)
+  identity.py     DeviceRegistry: one name ↔ one phone (HttpOnly cookie), lecturer reset
   attendance.py   AttendanceService: lectures, tokens, check-ins, pulses · attendance_status()
   engagement.py   PollService · CommentService
   ai_tools.py     LLMClient (interface) · ClaudeClient · OfflineClient · summary & homework review
