@@ -1,13 +1,22 @@
-"""Unit tests for the service classes (no browser, no sound — the sound layer only delivers a token string)."""
+"""Unit tests for the service classes (no browser, no sound — the sound layer only delivers a token string).
+
+Each test name maps to an SRS requirement where possible, so the testing strategy can trace coverage.
+"""
+import io
+
 import pytest
 
 from app import db as dbmod
-from app.ai_tools import OfflineClient, extractive_summary, review_homework, similarity_matrix, split_transcript, summarize_lecture
-from app.attendance import PULSE_WINDOW, SOUND_TOKEN_TTL, TOKEN_ALPHABET, TOKEN_LENGTH, AttendanceService, attendance_status
-from app.engagement import CommentService, PollService
+from app.ai_tools import (extractive_summary, parse_transcript, review_homework, similarity_matrix, speaking_stats,
+                          student_summary, teaching_feedback)
+from app.attendance import TOKEN_ALPHABET, TOKEN_LENGTH, TOKEN_TTL, AttendanceService
 from app.export import ExcelExporter
+from app.forum import ForumService
 from app.identity import DeviceRegistry
-from app.roster import CourseRoster, CsvRosterSource, Student, key_for_name
+from app.lectures import LectureService, LectureStateError, MaterialService
+from app.llm import ClaudeClient, LLMSettings, OfflineClient
+from app.polls import PollService, Question, parse_poll_file, template_csv
+from app.roster import CourseRoster, CourseService, CsvRosterSource, Student, key_for_name, roster_source_for
 
 ROSTER_CSV = "name\nNoa Levi\nDaniel Cohen\n"  # like the real list: names only
 NOA, DAN = key_for_name("Noa Levi"), key_for_name("Daniel Cohen")
@@ -29,199 +38,319 @@ def env():
     conn = dbmod.connect(":memory:")
     clock = FakeClock()
     roster = CourseRoster(conn)
-    roster.replace_all(CsvRosterSource(ROSTER_CSV))
-    return dict(conn=conn, clock=clock, roster=roster, devices=DeviceRegistry(conn, roster, clock),
-                att=AttendanceService(conn, clock), polls=PollService(conn, clock), comments=CommentService(conn, clock))
+    courses = CourseService(conn, clock)
+    cid = courses.create("SE")
+    roster.import_into(cid, CsvRosterSource(ROSTER_CSV))
+    lectures = LectureService(conn, clock)
+    return dict(conn=conn, clock=clock, cid=cid, roster=roster, courses=courses, lectures=lectures,
+                devices=DeviceRegistry(conn, roster, clock), att=AttendanceService(conn, clock),
+                polls=PollService(conn, clock), forum=ForumService(conn, clock), materials=MaterialService(conn, clock))
 
 
-# ---------------- Roster & identity ----------------
+def open_lecture(env, title="L1"):
+    lid = env["lectures"].create(env["cid"], title)
+    env["lectures"].open(lid)
+    return lid
+
+
+# ---------------- FR-2: roster ----------------
 def test_names_only_csv_gets_stable_keys():
     students = CsvRosterSource("﻿Name\nNoa  Levi\n\n").load()
     assert [s.name for s in students] == ["Noa Levi"]
-    assert students[0].student_id == key_for_name("noa levi")  # same key on re-import
+    assert students[0].student_id == key_for_name("noa levi")  # FR-2.3: same key on re-import
 
 
-def test_csv_first_and_last_name_columns():
+def test_csv_first_last_and_optional_id():
     assert CsvRosterSource("First Name,Last Name\nNoa,Levi\n").load()[0].name == "Noa Levi"
-
-
-def test_csv_optional_id_column_is_kept():
     assert CsvRosterSource("ID,Full Name\n1234,A B\n").load() == [Student("1234", "A B")]
 
 
-def test_csv_without_name_column_or_with_duplicates_is_rejected():
+def test_xlsx_roster():
+    from openpyxl import Workbook
+    wb = Workbook()
+    wb.active.append(["שם פרטי", "שם משפחה"])
+    wb.active.append(["נועה", "לוי"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    assert roster_source_for("list.xlsx", buf.getvalue()).load()[0].name == "נועה לוי"
+
+
+def test_roster_rejects_missing_name_column_and_duplicates():
     with pytest.raises(ValueError):
         CsvRosterSource("id,email\n1,a@b.c\n").load()
     with pytest.raises(ValueError):
         CsvRosterSource("name\nNoa Levi\nnoa levi\n").load()
 
 
-def test_find_by_name_ignores_case_and_spaces(env):
-    r = env["roster"]
-    assert r.find_by_name("  noa   LEVI ").name == "Noa Levi"
-    assert r.find_by_name("Noa") is None
+def test_courses_have_separate_rosters(env):
+    other = env["courses"].create("Algorithms")
+    env["roster"].import_into(other, CsvRosterSource("name\nNoa Levi\nItai Golan\n"))
+    assert [s.name for s in env["roster"].students_of(other)] == ["Itai Golan", "Noa Levi"]
+    assert env["roster"].courses_of(NOA) == [env["cid"], other]  # same person in two courses
+    assert not env["roster"].is_enrolled(env["cid"], key_for_name("Itai Golan"))
 
 
+# ---------------- FR-4.1/4.2: identity ----------------
 def test_first_phone_owns_the_name(env):
-    d, noa = env["devices"], env["roster"].find_by_name("Noa Levi")
+    d, noa = env["devices"], env["roster"].find_by_name("  noa   LEVI ")
     first = d.claim(noa)
     assert first.ok and d.student_for(first.device_token) == noa
-    assert d.claim(noa, first.device_token).device_token == first.device_token  # same phone again: fine
-    assert not d.claim(noa, "other-phone").ok                                   # someone else: refused
-    assert d.student_for("forged") is None and d.student_for(None) is None
+    assert d.claim(noa, first.device_token).device_token == first.device_token
+    assert not d.claim(noa, "other-phone").ok
+    d.reset(noa.student_id)
+    assert d.student_for(first.device_token) is None and d.claim(noa, "real-noa-phone").ok
 
 
 def test_switching_name_releases_the_old_one(env):
     d, r = env["devices"], env["roster"]
-    noa, dan = r.find_by_name("Noa Levi"), r.find_by_name("Daniel Cohen")
-    tok = d.claim(noa).device_token
-    d.claim(dan, tok)  # picked the wrong name first, then corrected it
-    assert not d.is_registered(noa.student_id) and d.claim(noa).ok
+    tok = d.claim(r.get(NOA)).device_token
+    d.claim(r.get(DAN), tok)
+    assert not d.is_registered(NOA) and d.claim(r.get(NOA)).ok
 
 
-def test_lecturer_reset_frees_the_name(env):
-    d, noa = env["devices"], env["roster"].find_by_name("Noa Levi")
-    tok = d.claim(noa).device_token
-    d.reset(noa.student_id)
-    assert d.student_for(tok) is None and d.claim(noa, "real-noa-phone").ok
+# ---------------- FR-3: lecture lifecycle ----------------
+def test_lecture_lifecycle_and_reopen(env):
+    lec = env["lectures"]
+    lid = lec.create(env["cid"], "Intro")
+    assert lec.get(lid)["state"] == "draft"
+    with pytest.raises(LectureStateError):
+        lec.close(lid)                      # a draft cannot be closed
+    lec.open(lid)
+    lec.close(lid)
+    lec.reopen(lid)                         # FR-3.3: closed by mistake
+    assert lec.get(lid)["state"] == "open"
 
 
-# ---------------- Tokens & check-in ----------------
-def test_token_format(env):
-    lec = env["att"].start_lecture("L1")
-    tok = env["att"].issue_token(lec)
+def test_students_never_see_drafts(env):
+    lec = env["lectures"]
+    draft = lec.create(env["cid"], "Draft")
+    opened = open_lecture(env, "Open")
+    ids = [l["id"] for l in lec.visible_to_student([env["cid"]])]
+    assert opened in ids and draft not in ids
+
+
+def test_closing_ends_the_checkin_window(env):
+    lid = open_lecture(env)
+    env["att"].open_window(lid, "sound")
+    env["lectures"].close(lid)
+    assert env["att"].open_window_of(lid) is None
+
+
+# ---------------- FR-4: attendance ----------------
+def test_tokens_only_while_a_window_is_open(env):
+    lid = open_lecture(env)
+    with pytest.raises(ValueError):
+        env["att"].issue_token(lid)
+    env["att"].open_window(lid, "sound")
+    tok = env["att"].issue_token(lid)
     assert len(tok) == TOKEN_LENGTH and set(tok) <= set(TOKEN_ALPHABET)
 
 
+def test_window_needs_an_open_lecture(env):
+    draft = env["lectures"].create(env["cid"], "Draft")
+    with pytest.raises(ValueError):
+        env["att"].open_window(draft, "sound")
+
+
 def test_valid_token_checks_in_once(env):
-    att = env["att"]
-    lec = att.start_lecture("L1")
-    tok = att.issue_token(lec)
+    att, lid = env["att"], open_lecture(env)
+    att.open_window(lid, "sound")
+    tok = att.issue_token(lid)
     assert att.heard(NOA, tok).message == "Checked in"
     assert att.heard(NOA, tok).message == "Already checked in"
-    s = att.student_summary(lec, NOA)
-    assert s["checked_in"] and s["method"] == "sound"
+    assert att.record_of(lid, NOA)["method"] == "sound"
 
 
 def test_expired_token_is_rejected(env):
-    att, clock = env["att"], env["clock"]
-    lec = att.start_lecture("L1")
-    tok = att.issue_token(lec)
-    clock.advance(SOUND_TOKEN_TTL + 1)  # e.g. a recording replayed to a friend later
+    att, lid = env["att"], open_lecture(env)
+    att.open_window(lid, "sound")
+    tok = att.issue_token(lid)
+    env["clock"].advance(TOKEN_TTL["sound"] + 1)  # a recording replayed to a friend later
+    assert not att.heard(NOA, tok).ok and att.status_of(lid, NOA) == "absent"
+
+
+def test_token_after_the_lecturer_ended_checkin_is_rejected(env):
+    att, lid = env["att"], open_lecture(env)
+    att.open_window(lid, "qr")
+    tok = att.issue_token(lid)
+    att.close_window(lid)  # D-14: whoever missed it is late
     res = att.heard(NOA, tok)
-    assert not res.ok and res.message == "Code expired"
-    assert not att.student_summary(lec, NOA)["checked_in"]
+    assert not res.ok and "ended" in res.message
 
 
-def test_unknown_and_lowercase_tokens(env):
-    att = env["att"]
-    lec = att.start_lecture("L1")
+def test_student_from_another_course_cannot_check_in(env):
+    other = env["courses"].create("Other")
+    env["roster"].import_into(other, CsvRosterSource("name\nItai Golan\n"))
+    att, lid = env["att"], open_lecture(env)
+    att.open_window(lid, "sound")
+    assert not att.heard(key_for_name("Itai Golan"), att.issue_token(lid)).ok
+
+
+def test_unknown_token_and_lowercase(env):
+    att, lid = env["att"], open_lecture(env)
+    att.open_window(lid, "qr")
     assert not att.heard(NOA, "ZZZZZZ").ok
-    assert att.heard(NOA, att.issue_token(lec).lower()).ok
+    assert att.heard(NOA, att.issue_token(lid).lower()).ok
+    assert att.record_of(lid, NOA)["method"] == "qr"
 
 
-def test_token_from_previous_lecture_is_rejected(env):
-    att = env["att"]
-    old = att.start_lecture("L1")
-    tok = att.issue_token(old)
-    att.start_lecture("L2")  # ends L1
-    assert not att.heard(NOA, tok).ok
+def test_lecturer_sets_late_and_can_edit_after_close(env):
+    att, lid = env["att"], open_lecture(env)
+    env["lectures"].close(lid)
+    att.set_status(lid, DAN, "late")          # FR-4.8: manual, also after the lecture is closed
+    assert att.record_of(lid, DAN) == {"status": "late", "method": "manual", "at": env["clock"]()}
+    with pytest.raises(ValueError):
+        att.set_status(lid, DAN, "sleeping")
 
 
-def test_qr_channel_is_recorded(env):
-    att = env["att"]
-    lec = att.start_lecture("L1")
-    att.heard(NOA, att.issue_token(lec, "qr"))
-    assert att.student_summary(lec, NOA)["method"] == "qr"
+def test_attendance_sheet_defaults_to_absent(env):
+    lid = open_lecture(env)
+    sheet = env["att"].sheet(lid, env["roster"].students_of(env["cid"]))
+    assert {r["name"]: r["status"] for r in sheet} == {"Daniel Cohen": "absent", "Noa Levi": "absent"}
 
 
-def test_manual_check_in(env):
-    att = env["att"]
-    lec = att.start_lecture("L1")
-    att.manual_check_in(lec, DAN)
-    assert att.student_summary(lec, DAN)["method"] == "manual"
+# ---------------- FR-5: polls ----------------
+def quiz(text="2+2?", correct=1):
+    return Question(text, "quiz", ["3", "4", "5"], correct)
 
 
-# ---------------- Pulses ----------------
-def test_pulse_token_counts_for_pulse(env):
-    att, clock = env["att"], env["clock"]
-    lec = att.start_lecture("L1")
-    att.heard(NOA, att.issue_token(lec))
-    pulse = att.start_pulse(lec)
-    res = att.heard(NOA, att.issue_token(lec))
-    assert res.kind == "pulse" and att.heard_pulse(pulse, NOA)
-    clock.advance(PULSE_WINDOW + 1)
-    assert att.active_pulse(lec) is None
-    att.start_pulse(lec)  # Noa misses the second pulse
-    s = att.student_summary(lec, NOA)
-    assert (s["pulses_heard"], s["pulses_total"]) == (1, 2)
+def test_poll_with_several_question_kinds(env):
+    p, lid = env["polls"], open_lecture(env)
+    pid = p.create(lid, "Check", [quiz(), Question("Clear?", "choice", ["Yes", "No"]),
+                                  Question("What to repeat?", "text")])
+    p.launch(pid)
+    q_quiz, q_choice, q_text = [q["id"] for q in p.of_lecture(lid)[0]["questions"]]
+    assert p.answer(q_quiz, NOA, 1) and p.answer(q_quiz, DAN, 0)
+    assert not p.answer(q_quiz, NOA, 2)        # one answer per student
+    assert p.answer(q_text, NOA, text="Liskov please")
+    assert not p.answer(q_choice, NOA, 7)      # no such option
+    res = p.of_lecture(lid)[0]["questions"]
+    assert res[0]["percent_correct"] == 50 and res[2]["texts"] == ["Liskov please"]
 
 
-def test_hearing_a_pulse_also_checks_in_late_arrival(env):
-    att = env["att"]
-    lec = att.start_lecture("L1")
-    att.start_pulse(lec)
-    att.heard(DAN, att.issue_token(lec))
-    assert att.student_summary(lec, DAN)["checked_in"]
+def test_quiz_validation():
+    with pytest.raises(ValueError):
+        Question("No answer marked", "quiz", ["a", "b"]).validate()
+    with pytest.raises(ValueError):
+        Question("One option", "choice", ["a"]).validate()
+    assert Question("Free", "text", ["ignored"]).validate().options == []
 
 
-def test_attendance_status_without_pulses():
-    # Only the cases that do not depend on the pulse policy (still to be decided — see attendance_status).
-    assert attendance_status(True, 0, 0) == "Present"
-    assert attendance_status(False, 0, 0) == "Absent"
-    assert attendance_status(False, 0, 3) == "Absent"
-
-
-# ---------------- Polls & comments ----------------
-def test_poll_vote_once_and_counts(env):
-    p, att = env["polls"], env["att"]
-    lec = att.start_lecture("L1")
-    pid = p.create(lec, "Clear?", ["Yes", "No", ""])
-    assert p.vote(pid, NOA, 0)
-    assert not p.vote(pid, NOA, 1)  # second vote ignored
-    assert not p.vote(pid, DAN, 5)  # no such option
-    assert p.open_poll(lec)["counts"] == [1, 0]
+def test_draft_and_closed_polls_cannot_be_answered(env):
+    p, lid = env["polls"], open_lecture(env)
+    pid = p.create(lid, "Later", [quiz()])
+    qid = p.of_lecture(lid)[0]["questions"][0]["id"]
+    assert not p.answer(qid, NOA, 1)           # prepared in advance, not launched yet
+    p.launch(pid)
     p.close(pid)
-    assert p.open_poll(lec) is None and not p.vote(pid, DAN, 1)
+    assert not p.answer(qid, NOA, 1)
 
 
-def test_poll_validation_and_one_open_poll(env):
-    p, lec = env["polls"], env["att"].start_lecture("L1")
+def test_correct_answer_shown_only_if_allowed_and_answered(env):
+    p, lid = env["polls"], open_lecture(env)
+    pid = p.create(lid, "Q", [quiz()], show_correct=True)
+    p.launch(pid)
+    qid = p.of_lecture(lid)[0]["questions"][0]["id"]
+    assert "correct" not in p.for_student(lid, NOA)[0]["questions"][0]
+    p.answer(qid, NOA, 0)
+    assert p.for_student(lid, NOA)[0]["questions"][0]["correct"] == 1
+    p.set_show_correct(pid, False)
+    assert "correct" not in p.for_student(lid, NOA)[0]["questions"][0]
+
+
+def test_poll_import_template_round_trip():
+    qs = parse_poll_file("poll.csv", template_csv().encode("utf-8"))
+    assert [q.kind for q in qs] == ["quiz", "choice", "text"] and qs[0].correct == 1
+
+
+def test_poll_import_reports_the_bad_row():
+    data = "question,type,option1,option2,correct\nOk?,choice,a,b,\nBad quiz,quiz,a,b,\n".encode()
+    with pytest.raises(ValueError, match="Row 3"):
+        parse_poll_file("p.csv", data)
+
+
+# ---------------- FR-6: forum ----------------
+def test_forum_anonymous_is_fully_anonymous(env):
+    f, lid = env["forum"], open_lecture(env)
+    pid = f.post(lid, NOA, "Slower please", anonymous=True)
+    row = env["conn"].execute("SELECT student_id FROM posts WHERE id = ?", (pid,)).fetchone()
+    assert row["student_id"] is None                     # D-8: not stored at all
+    assert f.of_lecture(lid)[0]["author"] == "Anonymous"
+
+
+def test_forum_reply_upvote_order_and_delete(env):
+    f, lid = env["forum"], open_lecture(env)
+    a = f.post(lid, NOA, "First", anonymous=False)
+    b = f.post(lid, DAN, "Popular", anonymous=False)
+    assert f.toggle_upvote(b, NOA) and not f.toggle_upvote(b, NOA) and f.toggle_upvote(b, NOA)
+    f.reply(b, "Good question")
+    posts = f.of_lecture(lid, viewer_id=NOA)
+    assert [p["id"] for p in posts] == [b, a]            # most 👍 first
+    assert posts[0]["replies"][0]["text"] == "Good question" and posts[0]["upvoted"]
+    f.delete_post(b)
+    assert [p["id"] for p in f.of_lecture(lid)] == [a]
+
+
+# ---------------- FR-7: AI settings ----------------
+def test_api_key_is_never_returned(env):
+    s = LLMSettings(env["conn"])
+    assert isinstance(s.client(), OfflineClient)
+    s.save("anthropic", "claude-haiku-5-5", "sk-ant-secret-1234567890")
+    view = s.public_view()
+    assert view["key_set"] and "secret" not in str(view) and view["key_mask"].endswith("7890")
+    assert isinstance(s.client(), ClaudeClient)
+    s.save("anthropic", "claude-opus-5-5", None)        # empty key field keeps the saved key
+    assert s.client().model == "claude-opus-5-5" and s.public_view()["key_set"]
+    s.save("openai", "gpt-6-luna", None)                 # a key belongs to one provider
+    assert isinstance(s.client(), OfflineClient)
     with pytest.raises(ValueError):
-        p.create(lec, "Only one option?", ["Yes"])
-    first = p.create(lec, "Q1", ["a", "b"])
-    p.create(lec, "Q2", ["a", "b"])
-    assert p.open_poll(lec)["question"] == "Q2" and not p.vote(first, NOA, 0)
+        s.save("nope", "x", "k")
 
 
-def test_anonymous_comment_hides_name(env):
-    c, lec = env["comments"], env["att"].start_lecture("L1")
-    c.add(lec, NOA, "Slower please", anonymous=True)
-    c.add(lec, DAN, "Great example", anonymous=False)
-    authors = [x["author"] for x in c.for_lecture(lec)]
-    assert authors == ["Daniel Cohen", "Anonymous"]
+# ---------------- FR-7: AI features (offline path; no network in tests) ----------------
+VTT = """WEBVTT
+
+00:00:00.000 --> 00:00:30.000
+Um so today we talk about the Open/Closed principle, you know, it is important.
+
+00:00:30.000 --> 00:01:00.000
+Um a class should be open for extension. Any questions?
+"""
+
+
+def test_transcript_parsing_and_stats():
+    text, cues = parse_transcript(VTT)
+    assert "-->" not in text and len(cues) == 2 and cues[1][0] == 30.0
+    s = speaking_stats(text, cues)
+    assert s["minutes"] == 1.0 and s["fillers"]["um"] == 2 and s["questions_asked"] == 1
+    assert s["words_per_minute"] == s["words"]
+
+
+def test_teaching_feedback_offline_and_empty():
+    out = teaching_feedback(VTT, OfflineClient())
+    assert "Pace" in out["report"] and out["engine"].startswith("Offline")
     with pytest.raises(ValueError):
-        c.add(lec, NOA, "   ", anonymous=False)
+        teaching_feedback("WEBVTT\n\n", OfflineClient())
 
 
-# ---------------- Export ----------------
-def test_excel_export_has_expected_sheets(env):
-    from openpyxl import load_workbook
-    import io
-    att = env["att"]
-    lec = att.start_lecture("Intro")
-    att.heard(NOA, att.issue_token(lec))
-    data = ExcelExporter(env["roster"], att, env["devices"], env["polls"], env["comments"]).build()
-    wb = load_workbook(io.BytesIO(data))
-    assert wb.sheetnames == ["Overview", f"L{lec} Intro", "Polls", "Comments"]
-    rows = {r[1]: r[2] for r in wb["Overview"].iter_rows(min_row=2, values_only=True)}
-    assert rows == {"Noa Levi": "Present", "Daniel Cohen": "Absent"}
+class BrokenLLM(OfflineClient.__mro__[1]):  # an LLMClient whose provider is down
+    provider = "anthropic"
+
+    def complete(self, system, prompt):
+        raise ConnectionError("no network in class")
 
 
-# ---------------- AI tools (offline path; Claude is not called in tests) ----------------
-def test_vtt_timing_lines_are_removed():
-    text = split_transcript("WEBVTT\n\n1\n00:00:01.000 --> 00:00:02.000\nHello <b>class</b>.\n")
-    assert text == "Hello class."
+def test_ai_falls_back_when_the_provider_fails():
+    llm = BrokenLLM("claude-haiku-5-5", "k")
+    assert "unavailable" in teaching_feedback(VTT, llm)["note"]
+    assert student_summary("A long enough sentence about polymorphism and classes.", llm)["report"]
+    out = review_homework({"noa": "def f(): pass", "dan": "def f(): pass"}, "", llm)
+    assert out["engine"].startswith("Offline") and out["pairs"][0]["similarity"] >= out["flag_threshold"]
+
+
+def test_similarity_ignores_comments_and_whitespace():
+    pairs = similarity_matrix({"a": "x = 1  # mine\n", "b": "x = 1", "c": "completely different code here"})
+    assert pairs[0] == {"a": "a", "b": "b", "similarity": 100}
 
 
 def test_extractive_summary_keeps_order_and_limit():
@@ -230,25 +359,16 @@ def test_extractive_summary_keeps_order_and_limit():
     assert len(out) == 3 and out == sorted(out, key=text.index)
 
 
-def test_summary_offline_and_empty():
-    assert summarize_lecture("Polymorphism lets one interface have many forms in our code.", OfflineClient())["summary"]
-    with pytest.raises(ValueError):
-        summarize_lecture("WEBVTT\n\n", OfflineClient())
-
-
-def test_similarity_ignores_comments_and_whitespace():
-    pairs = similarity_matrix({"a": "x = 1  # mine\n", "b": "x = 1", "c": "completely different code here"})
-    assert pairs[0] == {"a": "a", "b": "b", "similarity": 100}
-
-
-class BrokenLLM:
-    name = "broken"
-
-    def complete(self, system, prompt):
-        raise ConnectionError("no network in class")
-
-
-def test_homework_review_falls_back_when_llm_fails():
-    out = review_homework({"noa": "def f(): pass", "dan": "def f(): pass"}, "", BrokenLLM())
-    assert out["engine"].startswith("Offline") and set(out["reviews"]) == {"noa", "dan"}
-    assert out["pairs"][0]["similarity"] >= out["flag_threshold"]
+# ---------------- FR-4.11: export ----------------
+def test_excel_export(env):
+    from openpyxl import load_workbook
+    att, lid = env["att"], open_lecture(env, "Intro")
+    env["lectures"].create(env["cid"], "Draft")  # drafts are not exported
+    att.open_window(lid, "sound")
+    att.heard(NOA, att.issue_token(lid))
+    att.set_status(lid, DAN, "late")
+    data = ExcelExporter(env["courses"], env["roster"], env["lectures"], att, env["polls"], env["forum"]).build(env["cid"])
+    wb = load_workbook(io.BytesIO(data))
+    assert wb.sheetnames == ["Overview", f"L{lid} Intro", "Polls", "Forum"]
+    rows = {r[0]: r[1] for r in wb["Overview"].iter_rows(min_row=2, values_only=True)}
+    assert rows == {"Noa Levi": "Present", "Daniel Cohen": "Late"}

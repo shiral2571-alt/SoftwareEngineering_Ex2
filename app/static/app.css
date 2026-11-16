@@ -32,9 +32,33 @@ th { position:sticky; top:0; background:var(--card); }
 .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:14px; }
 .stat { font-size:2rem; font-weight:700; }
 .comment { border-bottom:1px solid var(--line); padding:8px 0; }
-.md { white-space:pre-wrap; }
+.md { overflow-wrap:anywhere; }
 .overlay { position:fixed; inset:0; background:#fff; color:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:16px; z-index:10; text-align:center; }
 .overlay.hidden { display:none !important; }
 .overlay svg { width:min(80vw, 66vh); height:auto; }
 .overlay .url { font:600 clamp(14px, 2.2vw, 26px)/1.3 ui-monospace, Consolas, monospace; word-break:break-all; }
 .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--fg); color:var(--bg); padding:10px 16px; border-radius:10px; z-index:20; max-width:90vw; }
+
+/* ---- v2: courses, lecture states, polls builder, forum ---- */
+.layout { display:grid; grid-template-columns:260px 1fr; gap:14px; align-items:start; }
+@media (max-width: 800px) { .layout { grid-template-columns:1fr; } }
+.lec-item { display:block; width:100%; text-align:left; margin-bottom:6px; padding:10px 12px; }
+.lec-item[aria-current="true"] { outline:2px solid var(--accent); }
+.state { display:inline-block; padding:1px 8px; border-radius:99px; font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+.state.draft { background:var(--line); color:var(--muted); }
+.state.open { background:#d8f3e3; color:#1f6b3e; }
+.state.closed { background:#eceff3; color:#4a5560; }
+@media (prefers-color-scheme: dark) { .state.open { background:#1d3a2a; color:#7ee0a5; } .state.closed { background:#2a3036; color:#b5bec7; } }
+.toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+select.status { width:auto; padding:6px 8px; }
+.qbox { border:1px dashed var(--line); border-radius:10px; padding:10px; margin:8px 0; }
+.md h3 { font-size:1rem; margin:10px 0 4px; } .md p { margin:4px 0; } .md ul { margin:4px 0; padding-inline-start:20px; }
+.post { border-bottom:1px solid var(--line); padding:10px 0; }
+.reply { margin:6px 0 0 14px; padding:6px 10px; border-inline-start:3px solid var(--accent); background:var(--soft); border-radius:6px; }
+.vote { padding:4px 10px; font-size:.85rem; }
+.vote[aria-pressed="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+.opt.correct { outline:2px solid var(--ok); } .opt.chosen { background:var(--soft); }
+button.small, .small-btn { padding:5px 10px; font-size:.85rem; }
+.modal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:15; padding:16px; }
+.modal.hidden { display:none !important; }
+.modal > .card { width:min(560px, 100%); max-height:90vh; overflow:auto; }

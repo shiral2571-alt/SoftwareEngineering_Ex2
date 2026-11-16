@@ -24,7 +24,7 @@ const Sound = (() => {
   }
 
   // Plays `token` through the speakers. Returns the duration in seconds.
-  function broadcast(token, protocol = "GGWAVE_PROTOCOL_ULTRASOUND_NORMAL", volume = 50) {
+  function broadcast(token, protocol = "GGWAVE_PROTOCOL_AUDIBLE_NORMAL", volume = 50) {
     ensureAudio();
     const wave = ggwave.encode(instance, token, ggwave.ProtocolId[protocol], volume);
     const samples = convert(wave, Float32Array);
@@ -37,7 +37,8 @@ const Sound = (() => {
     return samples.length / ctx.sampleRate;
   }
 
-  // Starts the microphone and calls onToken(text) for every plausible decoded token.
+  // Opens the microphone and calls onToken(text) for every plausible decoded token.
+  // Returns stop(): the caller closes the mic as soon as check-in succeeds (SRS NFR-4).
   async function listen(onToken) {
     ensureAudio();
     if (!window.isSecureContext) throw new Error("The microphone needs HTTPS — open the https:// link.");
@@ -58,7 +59,11 @@ const Sound = (() => {
     };
     input.connect(proc);
     proc.connect(ctx.destination);
-    window.__keepAlive = [stream, input, proc]; // stop the garbage collector from killing the mic graph
+    return function stop() {
+      proc.onaudioprocess = null;
+      try { input.disconnect(); proc.disconnect(); } catch {}
+      stream.getTracks().forEach(t => t.stop()); // the browser's "mic in use" indicator turns off
+    };
   }
 
   // Browsers only allow audio after a user gesture; call this from a click handler.
@@ -67,9 +72,26 @@ const Sound = (() => {
   return { ready, broadcast, listen, unlock };
 })();
 
-// Small helpers shared by both pages
+// ---------- small helpers shared by both pages ----------
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtTime = ts => ts ? new Date(ts * 1000).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+
+// Minimal, safe Markdown for AI reports: escape first, then headings, bold and bullets.
+function md(text) {
+  let html = "", inList = false;
+  for (const raw of esc(text).split("\n")) {
+    const line = raw.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+    const item = line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)$/);
+    if (item && !inList) { html += "<ul>"; inList = true; }
+    if (!item && inList) { html += "</ul>"; inList = false; }
+    if (item) html += `<li>${item[1]}</li>`;
+    else if (/^#{1,4}\s+/.test(line)) html += `<h3>${line.replace(/^#{1,4}\s+/, "")}</h3>`;
+    else if (line.trim()) html += `<p>${line}</p>`;
+  }
+  return html + (inList ? "</ul>" : "");
+}
+
 async function api(url, body) {
   const opts = body === undefined ? {} :
     body instanceof FormData ? { method: "POST", body } :
@@ -78,4 +100,10 @@ async function api(url, body) {
   const data = await r.json().catch(() => ({}));
   if (!r.ok && data.ok === undefined) data.ok = false;
   return data;
+}
+
+function toast(text) {
+  const t = document.createElement("div");
+  t.className = "toast"; t.textContent = text;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
 }

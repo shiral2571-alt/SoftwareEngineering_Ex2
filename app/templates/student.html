@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Class Check-in</title>
+<title>Class App</title>
 <link rel="stylesheet" href="/static/app.css">
 <script src="https://cdn.jsdelivr.net/npm/ggwave@0.4.0/ggwave.js"></script>
 <script src="/static/sound.js"></script>
 </head>
 <body>
 <main>
-  <h1>🎓 Class Check-in</h1>
+  <h1>🎓 Class App</h1>
 
-  <!-- 1. One-time registration: name from the course list + last 4 digits -->
+  <!-- 1. One-time registration: pick your name (no ID numbers, SRS D-3) -->
   <section id="registerCard" class="card hidden">
     <h2>Who are you?</h2>
     <p class="muted small">Only once on this phone. Your name stays linked to this phone — pick only your own.</p>
@@ -23,39 +23,43 @@
     <button class="primary big" id="regBtn">Save</button>
   </section>
 
-  <!-- 2. Lecture screen -->
-  <section id="mainCard" class="hidden">
-    <div class="card">
-      <div class="row"><div class="grow">Hi <b id="who"></b></div><span id="lectureTitle" class="muted small"></span></div>
-      <div id="statusLine" class="big-status muted">No lecture right now</div>
-      <button class="primary big" id="joinBtn">🎤 Join class</button>
+  <!-- 2. Home: my lectures -->
+  <section id="homeView" class="hidden">
+    <p>Hi <b id="who"></b></p>
+    <div id="lecCards"></div>
+  </section>
+
+  <!-- 3. One lecture -->
+  <section id="lecView" class="hidden">
+    <button class="small-btn" id="backBtn">‹ My lectures</button>
+    <div class="card" style="margin-top:8px">
+      <div class="row"><b class="grow" id="lecTitle"></b><span class="state" id="lecState"></span></div>
+      <div id="statusLine" class="big-status"></div>
+      <div id="checkinBox"></div>
       <p id="listenMsg" class="muted small" style="text-align:center"></p>
-      <p id="pulseInfo" class="small" style="text-align:center"></p>
     </div>
 
-    <div id="pollCard" class="card hidden">
-      <h2>📊 <span id="pollQ"></span></h2>
-      <div id="pollOpts"></div>
-      <p id="pollMsg" class="ok small"></p>
+    <div class="tabs" id="tabs">
+      <button data-tab="polls" aria-selected="true">📊 Polls <span id="pollBadge"></span></button>
+      <button data-tab="forum">💬 Forum</button>
+      <button data-tab="mat">📁 Materials</button>
     </div>
-
-    <div class="card">
-      <h2>💬 Comment or suggestion</h2>
-      <textarea id="commentText" rows="2" maxlength="500" placeholder="A question, a suggestion, “slower please”…"></textarea>
-      <label class="row" style="color:var(--fg)"><input type="checkbox" id="anon" style="width:auto"> Send anonymously</label>
-      <button id="commentBtn" style="width:100%">Send</button>
-    </div>
+    <section id="tab-polls"></section>
+    <section id="tab-forum" class="hidden">
+      <div class="card">
+        <textarea id="postText" rows="2" maxlength="1000" placeholder="Ask a question or leave a comment…"></textarea>
+        <label class="row small" style="color:var(--fg)"><input type="checkbox" id="anon" style="width:auto"> Post anonymously (no name is stored — not even the lecturer can see it)</label>
+        <button id="postBtn" style="width:100%">Post</button>
+      </div>
+      <div id="forumList" class="card"></div>
+    </section>
+    <section id="tab-mat" class="hidden"><div id="matList" class="card"></div></section>
   </section>
 </main>
 
 <script>
-let me = null, listening = false, lastSent = {}, wakeLock = null;
-
-function toast(text) {
-  const t = document.createElement("div");
-  t.className = "toast"; t.textContent = text;
-  document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
-}
+let lectureId = null, stopMic = null, sent = {};
+const STATUS = { present: ["✅ You're checked in", "ok"], late: ["🕒 Marked late", "warn"], absent: ["Not checked in", "muted"] };
 
 // ---------- registration ----------
 async function showRegister() {
@@ -69,85 +73,131 @@ $("regBtn").onclick = async () => {
   const r = await api("/api/register", { name: $("name").value });
   if (!r.ok) { $("regMsg").textContent = r.error || "Something went wrong"; return; }
   $("registerCard").classList.add("hidden");
-  refresh();
+  home();
 };
 
-// ---------- listening (presence by sound) ----------
-$("joinBtn").onclick = async () => {
-  try {
-    await Sound.ready;
-    await Sound.listen(onToken);
-    listening = true;
-    $("joinBtn").classList.add("hidden");
-    $("listenMsg").textContent = "🎧 Listening… keep this page open during the lecture.";
-    try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
-  } catch (e) { $("listenMsg").textContent = "⚠ " + e.message; }
-};
-
-async function onToken(token) {
-  const now = Date.now();
-  if (lastSent[token] && now - lastSent[token] < 15000) return; // same broadcast heard twice
-  lastSent[token] = now;
-  const r = await api("/api/heard", { token });
-  if (r.ok) { navigator.vibrate?.(150); toast("✅ " + r.message); refresh(); }
-}
-
-// Screen lock or app switch stops the microphone — say so instead of failing silently.
-document.addEventListener("visibilitychange", async () => {
-  if (document.visibilityState === "visible" && listening) {
-    try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
-    refresh();
-  }
-});
-
-// ---------- state ----------
-function render(s) {
+// ---------- home ----------
+async function home() {
+  lectureId = null; closeMic();
+  const s = await api("/api/me");
+  if (!s.registered) { $("homeView").classList.add("hidden"); $("lecView").classList.add("hidden"); if ($("registerCard").classList.contains("hidden")) showRegister(); return; }
   $("who").textContent = s.name;
-  const L = s.lecture;
-  $("lectureTitle").textContent = L ? L.title : "";
-  if (!L) {
-    $("statusLine").className = "big-status muted"; $("statusLine").textContent = "No lecture right now";
-    $("pulseInfo").textContent = ""; $("pollCard").classList.add("hidden"); return;
-  }
-  if (!listening) $("joinBtn").textContent = L.checked_in ? "🎤 Stay on for presence checks" : "🎤 Join class";
-  $("statusLine").className = "big-status " + (L.checked_in ? "ok" : "muted");
-  $("statusLine").textContent = L.checked_in ? "✅ You're checked in" : (listening ? "Waiting for the class sound…" : "Tap “Join class”");
-  $("pulseInfo").innerHTML = L.pulse_active
-    ? `<span class="pulse-dot"></span> Presence check running — keep the page open`
-    : (L.pulses_total ? `Presence checks: ${L.pulses_heard}/${L.pulses_total}` : "");
+  $("lecView").classList.add("hidden"); $("homeView").classList.remove("hidden");
+  $("lecCards").innerHTML = s.lectures.map(l => `<button class="card lec-item" data-id="${l.id}">
+      <div class="row"><b class="grow">${esc(l.title)}</b><span class="state ${l.state}">${l.state}</span></div>
+      <div class="small muted">${esc(l.course)} · <span class="${STATUS[l.status][1]}">${STATUS[l.status][0]}</span>
+      ${l.checkin ? ' · <b class="ok">check-in is open!</b>' : ""}</div></button>`).join("")
+    || '<p class="muted card">No lectures yet. When your lecturer opens one, it appears here.</p>';
+  $("lecCards").querySelectorAll(".lec-item").forEach(b => b.onclick = () => openLecture(+b.dataset.id));
+  const open = s.lectures.filter(l => l.state === "open");
+  if (open.length === 1 && !home.visited) { home.visited = true; openLecture(open[0].id); } // the usual case: straight in
+}
+$("backBtn").onclick = () => { home.visited = true; home(); };
 
-  const p = s.poll;
-  $("pollCard").classList.toggle("hidden", !p);
-  if (p && $("pollCard").dataset.id != p.id + ":" + p.voted) {
-    $("pollCard").dataset.id = p.id + ":" + p.voted;
-    $("pollQ").textContent = p.question;
-    $("pollMsg").textContent = p.voted ? "Thanks, your vote was counted." : "";
-    $("pollOpts").innerHTML = p.voted ? "" : p.options.map((o, i) =>
-      `<button class="opt" data-i="${i}">${esc(o)}</button>`).join("");
-    $("pollOpts").querySelectorAll("button").forEach(b => b.onclick = async () => {
-      await api("/api/vote", { poll_id: p.id, option: +b.dataset.i }); refresh();
-    });
-  }
+// ---------- one lecture ----------
+async function openLecture(id) {
+  lectureId = id;
+  $("homeView").classList.add("hidden"); $("lecView").classList.remove("hidden");
+  await refresh();
 }
 
 async function refresh() {
-  const s = await api("/api/me");
-  if (!s.registered) { $("mainCard").classList.add("hidden"); if ($("registerCard").classList.contains("hidden")) showRegister(); return; }
-  $("mainCard").classList.remove("hidden");
-  render(s);
+  if (!lectureId) return;
+  const L = await api(`/api/lecture/${lectureId}`);
+  if (L.ok === false) { home(); return; }
+  $("lecTitle").textContent = L.title;
+  $("lecState").className = "state " + L.state; $("lecState").textContent = L.state;
+  const [label, cls] = STATUS[L.status];
+  $("statusLine").className = "big-status " + cls; $("statusLine").textContent = label;
+  renderCheckin(L);
+  renderPolls(L.polls);
+  renderForum(L.forum);
+  $("matList").innerHTML = L.materials.length ? L.materials.map(m => `<details class="post"><summary>📄 ${esc(m.title)}</summary><div class="md small">${md(m.content)}</div></details>`).join("")
+    : '<p class="muted">Nothing shared yet.</p>';
 }
 
-$("commentBtn").onclick = async () => {
-  const text = $("commentText").value.trim();
-  if (!text) return;
-  const r = await api("/api/comment", { text, anonymous: $("anon").checked });
-  if (r.ok) { $("commentText").value = ""; toast("Sent — thank you!"); } else toast("⚠ " + (r.error || "Not sent"));
+// ---------- check-in: the mic opens only until one valid code is accepted (SRS FR-4.4, NFR-4) ----------
+function renderCheckin(L) {
+  if (L.status === "present") { closeMic(); $("checkinBox").innerHTML = ""; $("listenMsg").textContent = ""; return; }
+  if (L.checkin === "sound") {
+    if (!stopMic) $("checkinBox").innerHTML = `<button class="primary big" id="joinBtn">🎤 Check in</button>`;
+    $("joinBtn") && ($("joinBtn").onclick = startListening);
+    if (!stopMic) $("listenMsg").textContent = "Your microphone opens for a few seconds only, then closes.";
+  } else if (L.checkin === "qr") {
+    closeMic();
+    $("checkinBox").innerHTML = `<p class="small" style="text-align:center">📷 Scan the QR code on the screen with your phone camera.</p>`;
+    $("listenMsg").textContent = "";
+  } else {
+    closeMic();
+    $("checkinBox").innerHTML = "";
+    $("listenMsg").textContent = L.state === "open" ? "Check-in is not open right now." : "";
+  }
+}
+async function startListening() {
+  try {
+    await Sound.ready;
+    stopMic = await Sound.listen(onToken);
+    $("checkinBox").innerHTML = `<p class="ok" style="text-align:center"><span class="pulse-dot"></span> Listening…</p>`;
+    $("listenMsg").textContent = "Hold the phone up — this takes a few seconds.";
+    setTimeout(() => { if (stopMic) { closeMic(); $("listenMsg").textContent = "Didn't hear it. Tap again, move closer, or ask for the QR."; refresh(); } }, 45000);
+  } catch (e) { $("listenMsg").textContent = "⚠ " + e.message + " — ask the lecturer for the QR code."; }
+}
+function closeMic() { if (stopMic) { stopMic(); stopMic = null; } }
+async function onToken(token) {
+  if (sent[token]) return; sent[token] = true;  // the same broadcast is often heard twice
+  const r = await api("/api/heard", { token });
+  if (r.ok) { closeMic(); navigator.vibrate?.(150); toast("✅ " + r.message); refresh(); }
+}
+
+// ---------- polls (participation is open to everyone, even if not checked in — FR-4.12) ----------
+function renderPolls(polls) {
+  const open = polls.reduce((n, p) => n + p.questions.filter(q => !q.answered).length, 0);
+  $("pollBadge").textContent = open ? `(${open})` : "";
+  const typed = {};
+  $("tab-polls").querySelectorAll("textarea[data-q]").forEach(t => { if (t.value) typed[t.dataset.q] = t.value; });
+  $("tab-polls").innerHTML = polls.length ? polls.map(p => `<div class="card"><h2>${esc(p.title)}</h2>
+    ${p.questions.map((q, i) => `<div style="margin:10px 0"><b>${i + 1}. ${esc(q.text)}</b>
+      ${q.kind === "text" ? (q.answered ? '<p class="ok small">✓ Answer sent</p>' :
+          `<textarea rows="2" data-q="${q.id}" maxlength="500" placeholder="Your answer"></textarea><button class="small-btn" data-send="${q.id}">Send</button>`)
+        : q.options.map((o, j) => `<button class="opt ${q.my_option === j ? "chosen" : ""} ${q.correct === j ? "correct" : ""}"
+             data-q="${q.id}" data-j="${j}" ${q.answered ? "disabled" : ""}>${esc(o)}${q.correct === j ? " ✓" : ""}${q.my_option === j ? " ←" : ""}</button>`).join("")}
+    </div>`).join("")}</div>`).join("") : '<p class="muted card">No poll right now.</p>';
+  Object.entries(typed).forEach(([id, v]) => { const t = $("tab-polls").querySelector(`textarea[data-q="${id}"]`); if (t) t.value = v; });
+  $("tab-polls").querySelectorAll("button.opt").forEach(b => b.onclick = async () => {
+    await api("/api/answer", { question_id: +b.dataset.q, option: +b.dataset.j }); refresh();
+  });
+  $("tab-polls").querySelectorAll("[data-send]").forEach(b => b.onclick = async () => {
+    const t = $("tab-polls").querySelector(`textarea[data-q="${b.dataset.send}"]`);
+    if (t.value.trim()) { await api("/api/answer", { question_id: +b.dataset.send, text: t.value }); refresh(); }
+  });
+}
+
+// ---------- forum ----------
+function renderForum(posts) {
+  $("forumList").innerHTML = posts.length ? posts.map(p => `<div class="post">
+    <div class="row small muted"><span class="grow">${fmtTime(p.at)} · ${esc(p.author)}${p.mine ? " (you)" : ""}</span>
+      <button class="vote" data-vote="${p.id}" aria-pressed="${p.upvoted}" title="Me too">👍 ${p.votes}</button></div>
+    <div>${esc(p.text)}</div>
+    ${p.replies.map(r => `<div class="reply small"><b>Lecturer:</b> ${esc(r.text)}</div>`).join("")}</div>`).join("")
+    : '<p class="muted">No questions yet — be the first.</p>';
+  $("forumList").querySelectorAll("[data-vote]").forEach(b => b.onclick = async () => { await api(`/api/post/${b.dataset.vote}/upvote`, {}); refresh(); });
+}
+$("postBtn").onclick = async () => {
+  const text = $("postText").value.trim(); if (!text) return;
+  const r = await api(`/api/lecture/${lectureId}/post`, { text, anonymous: $("anon").checked });
+  if (r.ok) { $("postText").value = ""; toast("Posted"); refresh(); } else toast("⚠ " + (r.error || "Not sent"));
 };
+
+// ---------- tabs ----------
+$("tabs").querySelectorAll("button").forEach(b => b.onclick = () => {
+  $("tabs").querySelectorAll("button").forEach(x => x.setAttribute("aria-selected", x === b));
+  ["polls", "forum", "mat"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== b.dataset.tab));
+});
 
 const q = new URLSearchParams(location.search).get("qr");
 if (q) { toast(q === "ok" ? "✅ Checked in by QR" : "⚠ That QR code expired — scan the new one"); history.replaceState(null, "", "/"); }
-refresh();
-setInterval(refresh, 3000);
+home();
+setInterval(() => { lectureId ? refresh() : (!$("homeView").classList.contains("hidden") && home()); }, 3000);
 </script>
 </body>
 </html>

@@ -1,88 +1,125 @@
-"""Features 4 and 5: lecture summary and homework review.
+"""AI features (SRS §4.7). All of them use the `LLMClient` chosen in Settings, and fall back to offline
+methods when no key is configured or the provider fails, so the live demo never breaks (FR-7.4, NFR-8).
 
-Both go through the `LLMClient` interface. With ANTHROPIC_API_KEY set, Claude is used; without it an
-offline fallback answers (classic extractive summary / text statistics), so the live demo never fails.
+- Teaching feedback for the lecturer (feature 4, D-9)
+- Lecture summary for students (Could, FR-7.10)
+- Homework review + cross-student comparison (feature 5)
 """
 import difflib
 import itertools
-import os
 import re
-from abc import ABC, abstractmethod
 from collections import Counter
 
-CLAUDE_MODEL = "claude-opus-5-5"
+from .llm import LLMClient, OfflineClient
+
 MAX_INPUT_CHARS = 150_000  # protects the demo from a huge upload; reported to the user, never silent
-
-
-class LLMClient(ABC):
-    name = "LLM"
-
-    @abstractmethod
-    def complete(self, system: str, prompt: str) -> str: ...
-
-
-class ClaudeClient(LLMClient):
-    name = f"Claude ({CLAUDE_MODEL})"
-
-    def __init__(self):
-        import anthropic  # imported lazily: the app still runs if the package is missing
-        self.client = anthropic.Anthropic()
-
-    def complete(self, system: str, prompt: str) -> str:
-        response = self.client.beta.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=16000,
-            system=system,
-            messages=[{"role": "user", "content": prompt}],
-            output_config={"effort": "low"},          # short, routine task
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",                       # if a safety classifier declines, retry on another model
-        )
-        if response.stop_reason == "refusal":
-            raise RuntimeError("The model declined this request")
-        return "".join(b.text for b in response.content if b.type == "text").strip()
-
-
-class OfflineClient(LLMClient):
-    """No network, no key. Used as a fallback; it cannot really 'understand' text."""
-    name = "Offline fallback (no API key)"
-
-    def complete(self, system: str, prompt: str) -> str:
-        raise NotImplementedError("Offline client has no free-text generation")
-
-
-def default_llm() -> LLMClient:
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        try:
-            return ClaudeClient()
-        except Exception:
-            pass
-    return OfflineClient()
 
 
 def _clip(text: str) -> tuple[str, str]:
     if len(text) <= MAX_INPUT_CHARS:
         return text, ""
-    return text[:MAX_INPUT_CHARS], f"Note: input was {len(text):,} characters; only the first {MAX_INPUT_CHARS:,} were used."
+    return text[:MAX_INPUT_CHARS], f"Input was {len(text):,} characters; only the first {MAX_INPUT_CHARS:,} were used."
 
 
-# ---------------- Feature 4: lecture summary ----------------
+# ------------------------------------------------------------------ transcripts
+TIME_RE = re.compile(r"(\d+):(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d+):(\d{2}):(\d{2})[.,](\d{3})")
 
+
+def parse_transcript(text: str) -> tuple[str, list[tuple[float, float, str]]]:
+    """Return (plain text, cues). Cues are (start_s, end_s, text) when the file has WebVTT/SRT timings."""
+    cues, plain, current = [], [], None
+    for line in text.splitlines():
+        line = line.strip()
+        m = TIME_RE.search(line)
+        if m:
+            g = [int(x) for x in m.groups()]
+            current = [g[0] * 3600 + g[1] * 60 + g[2] + g[3] / 1000, g[4] * 3600 + g[5] * 60 + g[6] + g[7] / 1000, ""]
+            cues.append(current)
+            continue
+        if not line or line == "WEBVTT" or line.isdigit():
+            continue
+        line = re.sub(r"<[^>]+>", "", line)
+        plain.append(line)
+        if current is not None:
+            current[2] = (current[2] + " " + line).strip()
+    return " ".join(plain), [tuple(c) for c in cues]
+
+
+FILLERS_EN = ["um", "uh", "erm", "you know", "like", "basically", "actually", "kind of", "sort of", "okay so"]
+FILLERS_HE = ["אממ", "אה", "כאילו", "בעצם", "יעני", "נגיד", "סתם"]
+
+
+def speaking_stats(text: str, cues) -> dict:
+    """Offline teaching statistics (FR-7.7): pace, filler words, questions, longest stretch without a pause."""
+    words = re.findall(r"[\w']+", text.lower())
+    lower = " " + " ".join(words) + " "
+    fillers = {f: lower.count(f" {f} ") for f in FILLERS_EN + FILLERS_HE}
+    fillers = {f: n for f, n in sorted(fillers.items(), key=lambda x: -x[1]) if n}
+    stats = {"words": len(words), "questions_asked": text.count("?"), "fillers": fillers,
+             "filler_total": sum(fillers.values())}
+    if cues:
+        duration = cues[-1][1] - cues[0][0]
+        stats["minutes"] = round(duration / 60, 1)
+        stats["words_per_minute"] = round(len(words) / (duration / 60)) if duration > 0 else None
+        longest, run_start = 0.0, cues[0][0]
+        for prev, cur in zip(cues, cues[1:]):
+            if cur[0] - prev[1] > 3.0:  # a pause of 3+ seconds ends a stretch
+                longest, run_start = max(longest, prev[1] - run_start), cur[0]
+        stats["longest_stretch_min"] = round(max(longest, cues[-1][1] - run_start) / 60, 1)
+    return stats
+
+
+def _stats_markdown(s: dict) -> str:
+    lines = [f"- **Words:** {s['words']:,}"]
+    if s.get("minutes"):
+        lines.append(f"- **Length:** {s['minutes']} min · **Pace:** {s.get('words_per_minute')} words/min "
+                     "(≈120–160 is comfortable)")
+        lines.append(f"- **Longest stretch without a pause:** {s['longest_stretch_min']} min")
+    lines.append(f"- **Questions asked:** {s['questions_asked']}")
+    top = ", ".join(f"“{f}” ×{n}" for f, n in list(s["fillers"].items())[:6]) or "none found"
+    lines.append(f"- **Filler words:** {s['filler_total']} ({top})")
+    return "\n".join(lines)
+
+
+# ------------------------------------------------------------------ feature 4: teaching feedback (lecturer only)
+# TODO(you + partner): the ready-made prompt (SRS FR-7.6, open issue OI-3). This is the heart of feature 4 —
+# it decides what the lecturer actually learns about their teaching. The draft below works; make it yours:
+#   - Which aspects matter most to a lecturer? (clarity, pace, examples, engagement, structure, language?)
+#   - How short is "short"? The lecturer said long reports are not read.
+#   - Tone: a colleague's honest notes, or a gentle coach?
+#   - Should it quote exact moments ("at 00:23 you said…") so feedback is concrete?
+TEACHING_FEEDBACK_PROMPT = """You are an experienced teaching coach. You receive the transcript of one university \
+lecture and statistics measured from it. Write SHORT feedback for the lecturer (max 200 words, Markdown), \
+in the language of the transcript:
+1. **What worked** — 2 bullets.
+2. **What to improve** — 3 bullets, each concrete and actionable (pace, clarity, examples, filler words, \
+long monologues without a question to the class).
+3. **One thing to try next lecture.**
+Be specific and kind. Do not summarize the lecture content."""
+
+
+def teaching_feedback(transcript: str, llm: LLMClient) -> dict:
+    text, cues = parse_transcript(transcript)
+    text, note = _clip(text)
+    if not text.strip():
+        raise ValueError("The transcript is empty")
+    stats = speaking_stats(text, cues)
+    stats_md = _stats_markdown(stats)
+    if not isinstance(llm, OfflineClient):
+        try:
+            report = llm.complete(TEACHING_FEEDBACK_PROMPT, f"Measured statistics:\n{stats_md}\n\nTranscript:\n{text}")
+            return {"engine": llm.name, "report": f"### Measured\n{stats_md}\n\n### Feedback\n{report}",
+                    "stats": stats, "note": note}
+        except Exception as e:  # no internet in class, bad key → still show the measured part
+            note = (note + " " if note else "") + f"AI unavailable ({e.__class__.__name__}); measured statistics only."
+    return {"engine": OfflineClient().name, "report": f"### Measured\n{stats_md}", "stats": stats, "note": note}
+
+
+# ------------------------------------------------------------------ student summary (Could, FR-7.10)
 STOPWORDS = set("""a an the and or but if of to in on at for with from by as is are was were be been being this that these
 those it its we you they he she i our your their there here so not no do does did can will would should could have has had
 about into than then also just more most very what which who whom how when where why all any each some such only own same
 too s t don now um uh like okay ok yeah let going gonna""".split())
-
-
-def split_transcript(text: str) -> str:
-    """Strip WebVTT/SRT timing lines so plain sentences remain."""
-    lines = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line or line == "WEBVTT" or line.isdigit() or "-->" in line:
-            continue
-        lines.append(re.sub(r"<[^>]+>", "", line))
-    return " ".join(lines)
 
 
 def extractive_summary(text: str, max_sentences: int = 5) -> list[str]:
@@ -102,37 +139,32 @@ def extractive_summary(text: str, max_sentences: int = 5) -> list[str]:
     return [sentences[i] for i in best]
 
 
-def summarize_lecture(transcript: str, llm: LLMClient) -> dict:
-    text, note = _clip(split_transcript(transcript))
+def student_summary(transcript: str, llm: LLMClient) -> dict:
+    text, _ = parse_transcript(transcript)
+    text, note = _clip(text)
     if not text.strip():
         raise ValueError("The transcript is empty")
     if not isinstance(llm, OfflineClient):
         try:
             summary = llm.complete(
-                "You summarize university lecture transcripts for students who missed the class. "
-                "Write in the language of the transcript. Use short Markdown: a 2-sentence overview, "
-                "then 'Key points' (bullets), then 'Terms to know' (bullets), then 'Open questions'.",
-                f"Lecture transcript:\n\n{text}")
-            return {"engine": llm.name, "summary": summary, "note": note}
-        except Exception as e:  # network down in class → still show something
-            note = (note + " " if note else "") + f"Claude unavailable ({e.__class__.__name__}); offline summary shown."
-    bullets = extractive_summary(text)
-    keywords = [w for w, _ in Counter(w for w in re.findall(r"[a-zA-Z֐-׿']+", text.lower())
-                                      if w not in STOPWORDS and len(w) > 3).most_common(8)]
-    summary = "**Key sentences**\n" + "\n".join(f"- {b}" for b in bullets) + \
-              "\n\n**Keywords:** " + ", ".join(keywords)
-    return {"engine": OfflineClient.name, "summary": summary, "note": note}
+                "Summarize this university lecture transcript for students who missed the class, in the language "
+                "of the transcript. Short Markdown: a 2-sentence overview, 'Key points' (bullets), 'Terms to know'.",
+                text)
+            return {"engine": llm.name, "report": summary, "note": note}
+        except Exception as e:
+            note = (note + " " if note else "") + f"AI unavailable ({e.__class__.__name__}); offline summary shown."
+    report = "**Key sentences**\n" + "\n".join(f"- {b}" for b in extractive_summary(text))
+    return {"engine": OfflineClient().name, "report": report, "note": note}
 
 
-# ---------------- Feature 5: homework review ----------------
-
+# ------------------------------------------------------------------ feature 5: homework review
 def _normalize(code: str) -> str:
     code = re.sub(r"#.*|//.*", "", code)          # drop comments
     return re.sub(r"\s+", " ", code).strip().lower()
 
 
 def similarity_matrix(submissions: dict[str, str]) -> list[dict]:
-    """Pairwise similarity (0–100%) after removing comments and whitespace. Deterministic, no LLM."""
+    """Pairwise similarity (0–100%) after removing comments and whitespace. Deterministic, no LLM (FR-7.14)."""
     norm = {k: _normalize(v) for k, v in submissions.items()}
     pairs = []
     for a, b in itertools.combinations(sorted(norm), 2):
@@ -145,7 +177,7 @@ SUSPICIOUS_SIMILARITY = 85  # % — flagged for the lecturer to look at, never a
 
 
 def review_homework(submissions: dict[str, str], assignment: str, llm: LLMClient) -> dict:
-    if len(submissions) < 1:
+    if not submissions:
         raise ValueError("Upload at least one submission")
     pairs = similarity_matrix(submissions)
     reviews, note = {}, ""
@@ -164,13 +196,13 @@ def review_homework(submissions: dict[str, str], assignment: str, llm: LLMClient
                 continue
             except Exception as e:
                 use_llm = False
-                note += f"Claude unavailable ({e.__class__.__name__}); offline review shown. "
+                note += f"AI unavailable ({e.__class__.__name__}); offline review shown. "
         lines = content.splitlines()
         comments = sum(1 for l in lines if l.strip().startswith(("#", "//")))
         funcs = len(re.findall(r"\bdef |\bfunction |\bclass ", content))
         reviews[name] = (f"- {len(lines)} lines, {len(content.split())} words\n"
                          f"- {funcs} functions/classes, {comments} comment lines\n"
-                         f"- (Set ANTHROPIC_API_KEY for a written review.)")
+                         f"- (Add an API key in Settings for a written review.)")
     comparison = ""
     if use_llm and len(submissions) > 1:
         try:
@@ -181,5 +213,5 @@ def review_homework(submissions: dict[str, str], assignment: str, llm: LLMClient
                 f"Assignment:\n{assignment or '(not given)'}\n\n{overview}")
         except Exception:
             comparison = ""
-    return {"engine": llm.name if use_llm else OfflineClient.name, "reviews": reviews, "pairs": pairs,
+    return {"engine": llm.name if use_llm else OfflineClient().name, "reviews": reviews, "pairs": pairs,
             "comparison": comparison, "flag_threshold": SUSPICIOUS_SIMILARITY, "note": note.strip()}

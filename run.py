@@ -9,6 +9,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"\n  Lecturer dashboard: http://localhost:{port}/lecturer")
     print(f"  Lecturer PIN:       {app.config['LECTURER_PIN']}")
-    print(f"  AI engine:          {app.extensions['services']['llm'].name}")
+    print(f"  AI engine:          {app.extensions['services'].llm().name}")
     print(f"  Phones need HTTPS:  cloudflared tunnel --url http://localhost:{port}\n")
     app.run(host="127.0.0.1", port=port, debug=False, threaded=True)

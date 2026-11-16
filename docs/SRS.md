@@ -2,7 +2,7 @@
 
 **Project:** Acoustic Attendance — a web-based teaching tool
 **Course:** Introduction to Software Engineering (OOP/OOD), Ex2
-**Version:** 0.1 (draft) · 2026-11-16
+**Version:** 0.2 · 2026-11-16 (status column updated after implementation)
 **Related documents:** [README](../README.md) · [CONCEPT](CONCEPT.md) · [REQUIREMENTS_CHECK](REQUIREMENTS_CHECK.md)
 
 ---
@@ -112,81 +112,81 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 ### 4.2 Courses and roster
 | ID | Requirement | Priority | Demo |
 |---|---|---|---|
-| FR-2.1 | The lecturer creates courses; each course has its own roster and lectures | Must | 🔧 |
-| FR-2.2 | Roster import from CSV or xlsx: a *name* column, or *first name* + *last name*. Hebrew headers are accepted. No ID numbers are needed | Must | ✅ CSV · 🔧 xlsx |
+| FR-2.1 | The lecturer creates courses; each course has its own roster and lectures | Must | ✅ |
+| FR-2.2 | Roster import from CSV or xlsx: a *name* column, or *first name* + *last name*. Hebrew headers are accepted. No ID numbers are needed | Must | ✅ |
 | FR-2.3 | Re-importing the same list keeps past attendance (stable internal key per name) | Must | ✅ |
 
 ### 4.3 Lectures
 | ID | Requirement | Priority | Demo |
 |---|---|---|---|
-| FR-3.1 | The lecturer creates a lecture in **Draft**. Only the lecturer sees drafts | Must | 🔧 |
-| FR-3.2 | The lecturer **opens** a lecture; students now see it | Must | ✅ (as "start") |
-| FR-3.3 | The lecturer **closes** a lecture and can **reopen** it, for example after closing by mistake | Must | 🔧 |
-| FR-3.4 | A lecture list per course: open any past lecture and view or edit its attendance, polls, forum and materials | Must | 🔧 |
-| FR-3.5 | Upload files and summaries to a lecture (materials) | Should | 🔧 |
+| FR-3.1 | The lecturer creates a lecture in **Draft**. Only the lecturer sees drafts | Must | ✅ |
+| FR-3.2 | The lecturer **opens** a lecture; students now see it | Must | ✅ |
+| FR-3.3 | The lecturer **closes** a lecture and can **reopen** it, for example after closing by mistake | Must | ✅ |
+| FR-3.4 | A lecture list per course: open any past lecture and view or edit its attendance, polls, forum and materials | Must | ✅ |
+| FR-3.5 | Upload files and summaries to a lecture (materials) | Should | ✅ |
 
 ### 4.4 Attendance (main feature)
 | ID | Requirement | Priority | Demo |
 |---|---|---|---|
 | FR-4.1 | **Registration:** once per phone, the student picks their name from the roster. One name ↔ one phone. Another phone choosing a taken name is refused. Picking a different name on the same phone releases the old one | Must | ✅ |
 | FR-4.2 | The lecturer can **reset** a name, for example when a student gets a new phone or someone took a name that isn't theirs | Must | ✅ |
-| FR-4.3 | **Check-in window:** the lecturer opens a short check-in window at a moment they choose, by **sound** or by **QR**. **There is no automatic stop:** the window closes only when the lecturer ends it (D-14). Whoever missed it is late | Must | 🔧 (tokens can be issued at any time today) |
-| FR-4.4 | **Sound check-in:** the laptop re-broadcasts a fresh token every ~10 s while the window is open. The student taps *Join class*, the **mic opens, hears one valid token and closes immediately** | Must | 🔧 (mic stays open today) |
-| FR-4.5 | **Audible sound by default.** Ultrasound is an option in Settings (§7, D-2) | Must | 🔧 (ultrasound is the default today) |
+| FR-4.3 | **Check-in window:** the lecturer opens a short check-in window at a moment they choose, by **sound** or by **QR**. **There is no automatic stop:** the window closes only when the lecturer ends it (D-14). Whoever missed it is late | Must | ✅ |
+| FR-4.4 | **Sound check-in:** the laptop re-broadcasts a fresh token every ~10 s while the window is open. The student taps *Join class*, the **mic opens, hears one valid token and closes immediately** | Must | ✅ |
+| FR-4.5 | **Audible sound by default.** Ultrasound is an option in Settings (§7, D-2) | Must | ✅ |
 | FR-4.6 | **QR check-in:** the projector shows a QR code that changes every ~15 s; students scan it with the phone camera | Must | ✅ |
 | FR-4.7 | Tokens are short-lived (≈20 s sound, ≈30 s QR) and valid only for the current lecture. The server rejects unknown, expired or foreign tokens | Must | ✅ |
-| FR-4.8 | **Statuses:** *Present* (checked in during a window), *Late*, *Absent*. **Late is set only by the lecturer, by hand.** The lecturer can change any status manually, also after the lecture is closed | Must | 🔧 (Late is missing) |
+| FR-4.8 | **Statuses:** *Present* (checked in during a window), *Late*, *Absent*. **Late is set only by the lecturer, by hand.** The lecturer can change any status manually, also after the lecture is closed | Must | ✅ |
 | FR-4.9 | A phone that already checked in a student in this lecture cannot switch to another name in the same lecture | Must | ✅ |
 | FR-4.10 | **Live attendance sheet:** counter (e.g. 32/40), status per student, time, method, and whether a phone is linked | Must | ✅ |
 | FR-4.11 | **Offline sheet:** Excel export per lecture and a course overview (students × lectures) | Must | ✅ |
 | FR-4.12 | Attendance and participation are **separate**: a student who is Absent or Late, for example watching from home on Zoom, can still answer polls and post in the forum | Must | ✅ |
 | FR-4.13 | Head count from a class photo as a sanity check | Won't | — |
-| FR-4.14 | Presence pulses during the lecture, a check-out sound, continuous listening | Won't | ✅ exists, to be removed |
+| FR-4.14 | Presence pulses during the lecture, a check-out sound, continuous listening | Won't | removed |
 
 ### 4.5 Polls
 | ID | Requirement | Priority | Demo |
 |---|---|---|---|
-| FR-5.1 | A poll is a **set of one or more questions** | Must | 🔧 (one question today) |
-| FR-5.2 | **Quiz questions:** multiple choice with a marked correct answer. The lecturer chooses whether students see the correct answer after answering | Must | 🔧 |
+| FR-5.1 | A poll is a **set of one or more questions** | Must | ✅ |
+| FR-5.2 | **Quiz questions:** multiple choice with a marked correct answer. The lecturer chooses whether students see the correct answer after answering | Must | ✅ |
 | FR-5.3 | **Feedback questions:** multiple choice without a correct answer | Must | ✅ |
-| FR-5.4 | **Free-text answers**, only for feedback questions (e.g. "How was the lecture?"). Quiz questions are never free text | Should | 🔧 |
-| FR-5.5 | Polls are prepared **in advance** inside the app, as part of a Draft or Open lecture, and launched with one click during the lecture. They can also be launched after the lecture | Must | 🔧 |
-| FR-5.6 | Poll import from **xlsx or csv** in a fixed format, with a downloadable template: `question, type, option1..option4, correct` | Should | 🔧 |
-| FR-5.7 | One answer per student per question; live results as bars; for quizzes, the % correct | Must | ✅ bars · 🔧 % correct |
-| FR-5.8 | Polls and results stay available in the lecture after it is closed | Must | 🔧 |
+| FR-5.4 | **Free-text answers**, only for feedback questions (e.g. "How was the lecture?"). Quiz questions are never free text | Should | ✅ |
+| FR-5.5 | Polls are prepared **in advance** inside the app, as part of a Draft or Open lecture, and launched with one click during the lecture. They can also be launched after the lecture | Must | ✅ |
+| FR-5.6 | Poll import from **xlsx or csv** in a fixed format, with a downloadable template: `question, type, option1..option4, correct` | Should | ✅ |
+| FR-5.7 | One answer per student per question; live results as bars; for quizzes, the % correct | Must | ✅ |
+| FR-5.8 | Polls and results stay available in the lecture after it is closed | Must | ✅ |
 
 ### 4.6 Forum: questions and comments
 | ID | Requirement | Priority | Demo |
 |---|---|---|---|
-| FR-6.1 | Each lecture has a **forum tab**. Students post questions or comments, during or after the lecture | Must | 🔧 (a simple comment feed today) |
-| FR-6.2 | The student chooses **named** or **anonymous**. Anonymous means **fully anonymous**: no name is stored, not even for the lecturer | Must | 🔧 (the name is stored today) |
-| FR-6.3 | The lecturer **replies** to a post, and students see the reply | Must | 🔧 |
-| FR-6.4 | The lecturer can **delete** a post | Must | 🔧 |
-| FR-6.5 | 👍 "Me too" on a question, so the lecturer sees what matters most to the class | Should | 🔧 |
+| FR-6.1 | Each lecture has a **forum tab**. Students post questions or comments, during or after the lecture | Must | ✅ |
+| FR-6.2 | The student chooses **named** or **anonymous**. Anonymous means **fully anonymous**: no name is stored, not even for the lecturer | Must | ✅ |
+| FR-6.3 | The lecturer **replies** to a post, and students see the reply | Must | ✅ |
+| FR-6.4 | The lecturer can **delete** a post | Must | ✅ |
+| FR-6.5 | 👍 "Me too" on a question, so the lecturer sees what matters most to the class | Should | ✅ |
 
 ### 4.7 AI tools
 
 #### 4.7.1 AI settings
 | ID | Requirement | Priority | Demo |
 |---|---|---|---|
-| FR-7.1 | The lecturer chooses a **provider** (Anthropic Claude, Google Gemini, OpenAI) and a **model**, and pastes an **API key** | Must | 🔧 (Claude via environment variable only) |
-| FR-7.1a | **Model list:** for each provider, the 2–3 best-known models, from a **cheap/fast** one (usually usable on a free tier where the provider offers one) up to the **strongest** one. Exact model IDs are confirmed when implemented, and a "custom model ID" field covers newer models | Must | 🔧 |
+| FR-7.1 | The lecturer chooses a **provider** (Anthropic Claude, Google Gemini, OpenAI) and a **model**, and pastes an **API key** | Must | ✅ |
+| FR-7.1a | **Model list:** for each provider, the 2–3 best-known models, from a **cheap/fast** one (usually usable on a free tier where the provider offers one) up to the **strongest** one. Exact model IDs are confirmed when implemented, and a "custom model ID" field covers newer models | Must | ✅ |
 | FR-7.1b | After a key is entered, the list is refreshed from the provider's own *list models* endpoint, so it stays current | Could | 🔧 |
-| FR-7.2 | The key is stored **on the server only**, never sent to the browser, and shown masked (e.g. `sk-…abcd`) | Must | 🔧 |
-| FR-7.3 | A **Test connection** button | Must | 🔧 |
+| FR-7.2 | The key is stored **on the server only**, never sent to the browser, and shown masked (e.g. `sk-…abcd`) | Must | ✅ |
+| FR-7.3 | A **Test connection** button | Must | ✅ |
 | FR-7.4 | Without a key, AI features fall back to offline methods, and the screen says so | Must | ✅ |
 
 #### 4.7.2 Teaching feedback (feature 4, for the **lecturer only**)
 | ID | Requirement | Priority | Demo |
 |---|---|---|---|
 | FR-7.5 | Upload a **transcript** (.vtt, .srt or .txt; Zoom produces one automatically) to a lecture | Must | ✅ |
-| FR-7.6 | A **ready-made prompt** is sent with the transcript to the selected provider and model. It returns a **short** teaching-feedback report: clarity, pace, filler words, long monologues, suggestions | Must | 🔧 (content summary today) |
-| FR-7.7 | Offline statistics from the transcript timestamps: words per minute and filler-word count | Should | 🔧 |
+| FR-7.6 | A **ready-made prompt** is sent with the transcript to the selected provider and model. It returns a **short** teaching-feedback report: clarity, pace, filler words, long monologues, suggestions | Must | ✅ |
+| FR-7.7 | Offline statistics from the transcript timestamps: words per minute and filler-word count | Should | ✅ |
 | FR-7.8 | Upload a **video or audio** file, which is transcribed first. This needs a provider with speech-to-text (OpenAI or Gemini); Claude has none | Could | 🔧 |
 | FR-7.9 | The lecturer edits the ready-made prompt | Could | 🔧 |
-| FR-7.10 | A lecture summary **for students** | Could | ✅ (exists as the content summary) |
+| FR-7.10 | A lecture summary **for students** | Could | ✅ |
 | FR-7.11 | A link (URL) to a Zoom recording | Won't | — |
-| FR-7.12 | The report is saved in the lecture's materials | Should | 🔧 |
+| FR-7.12 | The report is saved in the lecture's materials | Should | ✅ |
 
 #### 4.7.3 Homework review (feature 5)
 | ID | Requirement | Priority | Demo |

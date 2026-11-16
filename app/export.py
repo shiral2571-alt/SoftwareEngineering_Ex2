@@ -1,4 +1,4 @@
-"""Offline spreadsheet: one Excel file with attendance per lecture, a semester overview, polls and comments."""
+"""Offline spreadsheet (FR-4.11): one Excel file per course — overview, one sheet per lecture, polls, forum."""
 import datetime as dt
 import io
 
@@ -6,15 +6,16 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-STATUS_FILL = {"Present": "C6EFCE", "Partial": "FFEB9C", "Absent": "FFC7CE"}
+LABEL = {"present": "Present", "late": "Late", "absent": "Absent"}
+FILL = {"Present": "C6EFCE", "Late": "FFEB9C", "Absent": "FFC7CE"}
 
 
 def _fmt(ts):
     return dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") if ts else ""
 
 
-def _sheet(wb, title, header, rows):
-    ws = wb.create_sheet(title[:31])
+def _sheet(wb, title, header, rows, status_cols=()):
+    ws = wb.create_sheet(title[:31].replace("/", "-"))
     ws.append(header)
     for c in ws[1]:
         c.font = Font(bold=True)
@@ -23,58 +24,54 @@ def _sheet(wb, title, header, rows):
     for i, h in enumerate(header, 1):
         width = max([len(str(h))] + [len(str(r[i - 1])) for r in rows if i - 1 < len(r)])
         ws.column_dimensions[get_column_letter(i)].width = min(60, width + 2)
+    for row in ws.iter_rows(min_row=2):
+        for c in row:
+            if c.column in status_cols and c.value in FILL:
+                c.fill = PatternFill("solid", fgColor=FILL[c.value])
     ws.freeze_panes = "A2"
     return ws
 
 
 class ExcelExporter:
-    def __init__(self, roster, attendance, devices, polls, comments):
-        self.roster, self.attendance, self.devices = roster, attendance, devices
-        self.polls, self.comments = polls, comments
+    def __init__(self, courses, roster, lectures, attendance, polls, forum):
+        self.courses, self.roster, self.lectures = courses, roster, lectures
+        self.attendance, self.polls, self.forum = attendance, polls, forum
 
-    def build(self) -> bytes:
+    def build(self, course_id: int) -> bytes:
         wb = Workbook()
         wb.remove(wb.active)
-        students, lectures = self.roster.all(), self.attendance.lectures()
+        students = self.roster.students_of(course_id)
+        lectures = [l for l in reversed(self.lectures.of_course(course_id)) if l["state"] != "draft"]
 
-        # Overview: students x lectures
-        header = ["Key", "Name"] + [f"#{l['id']} {l['title']}" for l in lectures] + ["Present", "Rate"]
+        # Overview: students × lectures
+        header = ["Name"] + [f"#{l['id']} {l['title']}" for l in lectures] + ["Present", "Late", "Rate"]
         rows = []
         for s in students:
-            statuses = [self.attendance.student_summary(l["id"], s.student_id)["status"] for l in lectures]
-            present = sum(st == "Present" for st in statuses)
-            rows.append([s.student_id, s.name, *statuses, present,
-                         f"{round(100 * present / len(lectures))}%" if lectures else ""])
-        ws = _sheet(wb, "Overview", header, rows)
-        for row in ws.iter_rows(min_row=2, min_col=3, max_col=2 + len(lectures)):
-            for c in row:
-                if c.value in STATUS_FILL:
-                    c.fill = PatternFill("solid", fgColor=STATUS_FILL[c.value])
+            st = [LABEL[self.attendance.status_of(l["id"], s.student_id)] for l in lectures]
+            present, late = st.count("Present"), st.count("Late")
+            rows.append([s.name, *st, present, late,
+                         f"{round(100 * (present + late) / len(lectures))}%" if lectures else ""])
+        _sheet(wb, "Overview", header, rows, status_cols=range(2, 2 + len(lectures)))
 
-        # One sheet per lecture
+        poll_rows, forum_rows = [], []
         for l in lectures:
-            rows = []
-            for s in students:
-                sm = self.attendance.student_summary(l["id"], s.student_id)
-                rows.append([s.student_id, s.name, sm["status"], _fmt(sm["checked_in_at"]), sm["method"],
-                             f"{sm['pulses_heard']}/{sm['pulses_total']}",
-                             "yes" if self.devices.is_registered(s.student_id) else ""])
-            ws = _sheet(wb, f"L{l['id']} {l['title']}",
-                        ["Key", "Name", "Status", "Checked in", "Method", "Pulses", "Phone registered"], rows)
-            for row in ws.iter_rows(min_row=2, min_col=3, max_col=3):
-                for c in row:
-                    if c.value in STATUS_FILL:
-                        c.fill = PatternFill("solid", fgColor=STATUS_FILL[c.value])
-
-        poll_rows, comment_rows = [], []
-        for l in lectures:
-            for p in self.polls.all_for(l["id"]):
-                poll_rows.append([l["title"], p["question"],
-                                  " | ".join(f"{o}: {n}" for o, n in zip(p["options"], p["counts"])), p["total"]])
-            for c in reversed(self.comments.for_lecture(l["id"])):
-                comment_rows.append([l["title"], _fmt(c["at"]), c["author"], c["text"]])
-        _sheet(wb, "Polls", ["Lecture", "Question", "Results", "Votes"], poll_rows)
-        _sheet(wb, "Comments", ["Lecture", "Time", "Author", "Comment"], comment_rows)
+            sheet = self.attendance.sheet(l["id"], students)
+            _sheet(wb, f"L{l['id']} {l['title']}", ["Name", "Status", "Time", "Method"],
+                   [[r["name"], LABEL[r["status"]], _fmt(r["at"]), r["method"]] for r in sheet], status_cols=(2,))
+            for p in self.polls.of_lecture(l["id"]):
+                for q in p["questions"]:
+                    if q["kind"] == "text":
+                        result = " | ".join(q["texts"])
+                    else:
+                        result = " | ".join(f"{o}{' ✓' if i == q['correct'] else ''}: {n}"
+                                            for i, (o, n) in enumerate(zip(q["options"], q["counts"])))
+                    poll_rows.append([l["title"], p["title"], q["text"], q["kind"], result, q["total"],
+                                      f"{q['percent_correct']}%" if q.get("percent_correct") is not None else ""])
+            for post in self.forum.of_lecture(l["id"]):
+                forum_rows.append([l["title"], _fmt(post["at"]), post["author"], post["text"], post["votes"],
+                                   " / ".join(r["text"] for r in post["replies"])])
+        _sheet(wb, "Polls", ["Lecture", "Poll", "Question", "Type", "Results", "Answers", "% correct"], poll_rows)
+        _sheet(wb, "Forum", ["Lecture", "Time", "Author", "Post", "👍", "Lecturer reply"], forum_rows)
 
         buf = io.BytesIO()
         wb.save(buf)
