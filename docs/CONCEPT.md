@@ -124,4 +124,7 @@ Spike page for these tests: `spike/sound-test/index.html` (has a built-in test l
 - Exact token TTL and length.
 - Number and timing of pulses per lecture.
 - Threshold for "present" (e.g. ≥ 2 of 3 pulses?).
-- Optional: head-count from a class photo as an extra sanity check.
+- ~~Optional: head-count from a class photo as an extra sanity check.~~ **Decided 2026-11-13: not for now.**
+  Feature 1 gives the photo count only as an example ("e.g."). Our lecturer-side evaluation is the live counter plus presence pulses.
+  Rationale for the SRS: a photo tells *how many* people are in the room at one moment, while pulses tell *who* is still there.
+  May be revisited as a sanity check if time allows.
