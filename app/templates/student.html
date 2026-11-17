@@ -116,33 +116,66 @@ async function refresh() {
     : '<p class="muted">Nothing shared yet.</p>';
 }
 
-// ---------- check-in: the mic opens only until one valid code is accepted (SRS FR-4.4, NFR-4) ----------
+// ---------- check-in: "get ready" early, so the first sound is never missed (SRS FR-4.4, D-16) ----------
+// The student may tap before the lecturer starts the sound. The mic then waits at most LISTEN_LIMIT
+// seconds and closes as soon as one valid code is accepted (NFR-4).
+const LISTEN_LIMIT = 120;
+let listenUntil = 0, countdown = null, checkinMode = "";
+
 function renderCheckin(L) {
-  if (L.status === "present") { closeMic(); $("checkinBox").innerHTML = ""; $("listenMsg").textContent = ""; return; }
-  if (L.checkin === "sound") {
-    if (!stopMic) $("checkinBox").innerHTML = `<button class="primary big" id="joinBtn">🎤 Check in</button>`;
-    $("joinBtn") && ($("joinBtn").onclick = startListening);
-    if (!stopMic) $("listenMsg").textContent = "Your microphone opens for a few seconds only, then closes.";
-  } else if (L.checkin === "qr") {
-    closeMic();
-    $("checkinBox").innerHTML = `<p class="small" style="text-align:center">📷 Scan the QR code on the screen with your phone camera.</p>`;
-    $("listenMsg").textContent = "";
-  } else {
-    closeMic();
-    $("checkinBox").innerHTML = "";
-    $("listenMsg").textContent = L.state === "open" ? "Check-in is not open right now." : "";
+  let mode;
+  if (L.status === "present" || L.state !== "open") mode = "none";
+  else if (L.checkin === "qr") mode = "qr";
+  else mode = (stopMic ? "listening-" : "idle-") + (L.checkin === "sound" ? "live" : "wait");
+  if (mode === "none" || mode === "qr") closeMic();
+  if (mode === checkinMode) return;  // rebuild only when something changed (refresh runs every 3 s)
+  checkinMode = mode;
+
+  const box = $("checkinBox"), msg = $("listenMsg");
+  if (mode === "none") { box.innerHTML = ""; msg.textContent = ""; return; }
+  if (mode === "qr") {
+    box.innerHTML = `<p class="small" style="text-align:center">📷 Scan the QR code on the screen with your phone camera.</p>`;
+    msg.textContent = ""; return;
   }
+  if (mode.startsWith("idle")) {
+    const live = mode.endsWith("live");
+    box.innerHTML = `<button class="primary big" id="joinBtn">🎤 ${live ? "Check in now" : "Get ready to check in"}</button>`;
+    $("joinBtn").onclick = startListening;
+    msg.textContent = live ? "The lecturer is playing the check-in sound now."
+      : `Tap now — your phone will wait for the lecturer's sound (up to ${LISTEN_LIMIT / 60} minutes) and check you in. The mic closes right after.`;
+    return;
+  }
+  box.innerHTML = `<p class="ok" style="text-align:center"><span class="pulse-dot"></span> Listening… <span id="leftSec"></span></p>
+                   <button class="small-btn" id="cancelBtn" style="display:block;margin:0 auto">Stop listening</button>`;
+  $("cancelBtn").onclick = () => { closeMic(); msg.textContent = ""; refresh(); };
+  msg.textContent = mode.endsWith("live") ? "Hold the phone up — this takes a few seconds."
+    : "Ready ✓ Keep this page open. You'll be checked in when the lecturer plays the sound.";
+  tickCountdown();
 }
+
 async function startListening() {
   try {
     await Sound.ready;
     stopMic = await Sound.listen(onToken);
-    $("checkinBox").innerHTML = `<p class="ok" style="text-align:center"><span class="pulse-dot"></span> Listening…</p>`;
-    $("listenMsg").textContent = "Hold the phone up — this takes a few seconds.";
-    setTimeout(() => { if (stopMic) { closeMic(); $("listenMsg").textContent = "Didn't hear it. Tap again, move closer, or ask for the QR."; refresh(); } }, 45000);
+    listenUntil = Date.now() + LISTEN_LIMIT * 1000;
+    clearInterval(countdown);
+    countdown = setInterval(tickCountdown, 1000);
+    checkinMode = ""; refresh();
   } catch (e) { $("listenMsg").textContent = "⚠ " + e.message + " — ask the lecturer for the QR code."; }
 }
-function closeMic() { if (stopMic) { stopMic(); stopMic = null; } }
+function tickCountdown() {
+  if (!stopMic) return;
+  const left = Math.max(0, Math.round((listenUntil - Date.now()) / 1000));
+  if ($("leftSec")) $("leftSec").textContent = `(${left}s)`;
+  if (left === 0) {
+    closeMic(); checkinMode = "";
+    refresh().then(() => $("listenMsg").textContent = "Didn't hear the sound. Tap again, move closer, or ask for the QR.");
+  }
+}
+function closeMic() {
+  clearInterval(countdown); countdown = null;
+  if (stopMic) { stopMic(); stopMic = null; checkinMode = ""; }
+}
 async function onToken(token) {
   if (sent[token]) return; sent[token] = true;  // the same broadcast is often heard twice
   const r = await api("/api/heard", { token });

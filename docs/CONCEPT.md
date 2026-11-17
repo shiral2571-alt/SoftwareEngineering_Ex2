@@ -110,6 +110,11 @@ Spike page for these tests: `spike/sound-test/index.html` (has a built-in test l
 - Registration, microphone and check-in worked end to end. ✅
 - Reception worked **only very close to the laptop**. App defaults were used: ultrasound, Volume 50. Exact distance and phone model were not recorded.
   → Next: measure with Volume 100 and with Audible, and try the room's speakers (HDMI or projector audio) instead of the laptop speaker.
+### Real-phone test of "Get ready early" (2026-11-17)
+- The student tapped *Get ready* before the lecturer started the sound: checked in from the **first** broadcast, and the mic closed afterwards ✅ (SRS FR-4.4a, D-16).
+- **Audible: received ✅. Ultrasound: not received ❌** (same phone and setup; distance and phone model not recorded).
+  → Confirms D-2: audible is the default, and ultrasound stays an optional setting only.
+
 - Switching to **Audible** in Settings: **received** ✅. Distance was not recorded, but it worked beyond the ultrasound's very short range.
   → Working plan: Audible for check-in at the start of class; ultrasound for pulses only if it reaches far enough through the room's speakers; rotating QR as the fallback.
 

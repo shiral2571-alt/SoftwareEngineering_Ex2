@@ -131,7 +131,8 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 | FR-4.1 | **Registration:** once per phone, the student picks their name from the roster. One name ↔ one phone. Another phone choosing a taken name is refused. Picking a different name on the same phone releases the old one | Must | ✅ |
 | FR-4.2 | The lecturer can **reset** a name, for example when a student gets a new phone or someone took a name that isn't theirs | Must | ✅ |
 | FR-4.3 | **Check-in window:** the lecturer opens a short check-in window at a moment they choose, by **sound** or by **QR**. **There is no automatic stop:** the window closes only when the lecturer ends it (D-14). Whoever missed it is late | Must | ✅ |
-| FR-4.4 | **Sound check-in:** the laptop re-broadcasts a fresh token every ~10 s while the window is open. The student taps *Join class*, the **mic opens, hears one valid token and closes immediately** | Must | ✅ |
+| FR-4.4 | **Sound check-in:** the laptop re-broadcasts a fresh token every ~10 s while the window is open. The student taps *Check in*, the **mic opens, hears one valid token and closes immediately** | Must | ✅ |
+| FR-4.4a | **Get ready early:** while the lecture is open, the student can tap *Get ready to check in* **before** the lecturer starts the sound. The phone then waits for up to 2 minutes (with a countdown and a *Stop listening* button), so the first broadcast is not missed (D-16) | Must | ✅ |
 | FR-4.5 | **Audible sound by default.** Ultrasound is an option in Settings (§7, D-2) | Must | ✅ |
 | FR-4.6 | **QR check-in:** the projector shows a QR code that changes every ~15 s; students scan it with the phone camera | Must | ✅ |
 | FR-4.7 | Tokens are short-lived (≈20 s sound, ≈30 s QR) and valid only for the current lecture. The server rejects unknown, expired or foreign tokens | Must | ✅ |
@@ -203,7 +204,7 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 | NFR-1 | Usability (KISS) | A student checks in with **at most 2 taps** after the first registration. No typing, no app installation |
 | NFR-2 | Usability | The lecturer starts a check-in window with **one click** |
 | NFR-3 | Performance | 40 phones complete check-in within **60 seconds** of the window opening |
-| NFR-4 | Privacy | The microphone is open **only** during the student's own check-in, for a few seconds. Sound is decoded **inside the phone's browser**; only the 6-character token reaches the server |
+| NFR-4 | Privacy | The microphone is open **only** during the student's own check-in: at most 2 minutes when the student gets ready early, usually a few seconds, and it always closes right after a valid code. Sound is decoded **inside the phone's browser**; only the 6-character token reaches the server |
 | NFR-5 | Privacy | Only names are stored; no ID numbers. Fully anonymous posts store no student reference |
 | NFR-6 | Security | API keys stay on the server, and the lecturer pages require the PIN |
 | NFR-7 | Security | Students cannot fake attendance from outside the room: tokens are short-lived and issued only while a window is open, and QR codes rotate |
@@ -257,6 +258,7 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 | D-13 | 2026-11-13 | Live updates by short polling every 2–3 s instead of WebSockets | Simpler and works through the HTTPS tunnel |
 | D-14 | 2026-11-16 | The check-in window has **no automatic stop**; the lecturer ends it | The lecturer knows when everyone is seated; KISS |
 | D-15 | 2026-11-16 | 2–3 well-known models per provider, from cheap/fast (free tier where available) to the strongest, plus a custom-ID field | Lecturers differ in budget; model names change often, so the list must be easy to update |
+| D-16 | 2026-11-17 | Students can **get ready before** the lecturer starts the sound (FR-4.4a), with a 2-minute limit | Real-phone test: the *Check in* button appeared only after the sound had started, so the first broadcast was missed and the flow felt clumsy. Listening early fixes this, and the time limit keeps the privacy promise (NFR-4) |
 
 ---
 
