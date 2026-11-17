@@ -110,6 +110,14 @@ Spike page for these tests: `spike/sound-test/index.html` (has a built-in test l
 - Registration, microphone and check-in worked end to end. ✅
 - Reception worked **only very close to the laptop**. App defaults were used: ultrasound, Volume 50. Exact distance and phone model were not recorded.
   → Next: measure with Volume 100 and with Audible, and try the room's speakers (HDMI or projector audio) instead of the laptop speaker.
+### Teaching feedback with a real AI model (2026-11-17)
+- Gemini 3.5 Flash-Lite on a real lecture transcript, pasted from Zoom's transcript panel without timings.
+- **First run:** it followed the structure and the "don't guess" rule: it said student questions could not be counted because speakers are not labelled. It found one commitment and listed it as a task. But it **answered in English**.
+- **After D-18** (Hebrew headings in the prompt): it **answered in Hebrew** ✅.
+- The whole transcript was copied by hand from Zoom's panel. Without timings, pace and pauses cannot be measured, so a .vtt file is still preferable.
+- Word count: the first run had **1,671** words. The second run, with the transcript copied in full by hand, had **4,557** words. So the first copy captured only about a third. **Lesson:** copying from Zoom's panel is unreliable, so check the word count and prefer a .vtt file.
+- 4,557 words is still low for 1:33 h (a typical pace would give about 11,000–14,000). Likely reasons are silences, group work, or Zoom not transcribing everything. The feedback therefore reflects only part of what was said.
+
 ### Real-phone test of "Get ready early" (2026-11-17)
 - The student tapped *Get ready* before the lecturer started the sound: checked in from the **first** broadcast, and the mic closed afterwards ✅ (SRS FR-4.4a, D-16).
 - **Audible: received ✅. Ultrasound: not received ❌** (same phone and setup; distance and phone model not recorded).
