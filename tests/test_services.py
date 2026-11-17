@@ -329,6 +329,22 @@ def test_transcript_parsing_and_stats():
 def test_teaching_feedback_offline_and_empty():
     out = teaching_feedback(VTT, OfflineClient())
     assert "Pace" in out["report"] and out["engine"].startswith("Offline")
+    assert out["report"].startswith("**Model:** Offline")  # FR-7.6a: the report says who wrote it
+    assert "need a .vtt" in teaching_feedback("Plain pasted text without timings.", OfflineClient())["report"]
+
+
+class EchoLLM(OfflineClient.__mro__[1]):  # a working LLMClient that returns a fixed reply
+    provider = "google"
+
+    def complete(self, system, prompt):
+        assert "Write the whole report in Hebrew" in system  # D-18
+        return "### 1. שאלות של סטודנטים\n- לא ניתן לספור"
+
+
+def test_teaching_feedback_names_the_model_and_asks_for_hebrew():
+    out = teaching_feedback(VTT, EchoLLM("gemini-3.5-flash-lite", "k"))
+    assert out["report"].startswith("**Model:** Google Gemini · gemini-3.5-flash-lite")
+    assert "שאלות של סטודנטים" in out["report"]
     with pytest.raises(ValueError):
         teaching_feedback("WEBVTT\n\n", OfflineClient())
 

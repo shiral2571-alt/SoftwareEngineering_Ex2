@@ -182,6 +182,8 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 |---|---|---|---|
 | FR-7.5 | Upload a **transcript** (.vtt, .srt or .txt; Zoom produces one automatically) to a lecture | Must | ✅ |
 | FR-7.6 | A **ready-made prompt** (D-17) is sent with the transcript and the measured statistics to the selected provider and model. It returns a **short** report with these sections: (1) **student questions**: how many were asked, how many answered, how many postponed or cut off for time; (2) **overall**: enough examples? clear and in a sensible teaching order? professional mistakes to correct?; (3) **3 points to keep**; (4) **3 points to improve**; (5) **the lecturer's commitments to students** (e.g. "I'll get back to you"), listed as **tasks** ☐. The model must say so when the transcript is not good enough, and must not guess | Must | ✅ |
+| FR-7.6a | Every saved AI report starts with the **model that produced it** (e.g. *Google Gemini · gemini-3.5-flash-lite*, or *Offline*), so the lecturer knows how much to trust it | Must | ✅ |
+| FR-7.6b | The teaching-feedback report is written **in Hebrew** (D-18) | Must | ✅ |
 | FR-7.7 | Offline statistics from the transcript timestamps: words per minute and filler-word count | Should | ✅ |
 | FR-7.8 | Upload a **video or audio** file, which is transcribed first. This needs a provider with speech-to-text (OpenAI or Gemini); Claude has none | Could | 🔧 |
 | FR-7.9 | The lecturer edits the ready-made prompt | Could | 🔧 |
@@ -259,6 +261,7 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 | D-14 | 2026-11-16 | The check-in window has **no automatic stop**; the lecturer ends it | The lecturer knows when everyone is seated; KISS |
 | D-15 | 2026-11-16 | 2–3 well-known models per provider, from cheap/fast (free tier where available) to the strongest, plus a custom-ID field | Lecturers differ in budget; model names change often, so the list must be easy to update |
 | D-17 | 2026-11-17 | The teaching-feedback prompt was written by the team (FR-7.6): question statistics, examples / clarity / mistakes, 3 keep + 3 improve, commitments as tasks, brief, and "say so rather than invent" | Focuses on what a lecturer can act on next week. Forbidding guesses keeps the AI honest on poor transcripts, e.g. when speakers are not labelled |
+| D-18 | 2026-11-17 | Teaching feedback is always in Hebrew; the prompt gives Hebrew section headings. Every AI report names its model (FR-7.6a) | First real test (Gemini 3.5 Flash-Lite, real lecture transcript) answered in English although asked for "the language of the transcript". Small models copy the language of the headings. The team will use the model it has, so the prompt must compensate. Naming the model makes results comparable in the Tools Report |
 | D-16 | 2026-11-17 | Students can **get ready before** the lecturer starts the sound (FR-4.4a), with a 2-minute limit | Real-phone test: the *Check in* button appeared only after the sound had started, so the first broadcast was missed and the flow felt clumsy. Listening early fixes this, and the time limit keeps the privacy promise (NFR-4) |
 
 ---

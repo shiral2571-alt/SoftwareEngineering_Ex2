@@ -82,32 +82,36 @@ def _stats_markdown(s: dict) -> str:
 
 
 # ------------------------------------------------------------------ feature 4: teaching feedback (lecturer only)
-# The ready-made prompt (SRS FR-7.6, decision D-17). Written by the team: it defines what the lecturer
-# learns about their own teaching. Reply language follows the transcript; the report must stay short and honest.
+# The ready-made prompt (SRS FR-7.6, decisions D-17, D-18). Written by the team: it defines what the lecturer
+# learns about their own teaching. The report is always in Hebrew (D-18): the instructions are in English, but
+# the answer template below is in Hebrew, because small models tend to copy the headings' language.
 TEACHING_FEEDBACK_PROMPT = """You receive the transcript of one university lecture that I (the lecturer) gave, \
-plus a few statistics measured from it. Give me feedback on my teaching, in the language of the transcript, \
-in short Markdown, using exactly these sections:
+plus a few statistics measured from it. Give me feedback on my teaching.
 
-### 1. Student questions
-- How many questions students asked, and how many of them I actually answered.
-- How many times I postponed or cut off a student's question to move on or because of time.
+**Write the whole report in Hebrew.** Keep quotes from the transcript exactly as they are. \
+Use short Markdown with exactly these sections and headings:
 
-### 2. Overall
-- **Examples:** were there enough examples?
-- **Clarity and order:** was the lecture delivered properly and clearly, in a sensible teaching order?
-- **Professional mistakes:** did I say anything wrong that I should correct next time? Quote it briefly.
+### 1. שאלות של סטודנטים
+- כמה שאלות שאלו הסטודנטים, ועל כמה מהן עניתי בפועל.
+- כמה פעמים דחיתי או קטעתי שאלה של סטודנט כדי להתקדם או בגלל קוצר זמן.
 
-### 3. Keep (3 points)
-### 4. Improve (3 points)
+### 2. כללי
+- **דוגמאות:** האם היו מספיק דוגמאות?
+- **בהירות וסדר:** האם ההרצאה הועברה כראוי ובאופן ברור, בסדר לימודי הגיוני?
+- **טעויות מקצועיות:** האם אמרתי משהו שגוי שעליי לתקן בפעם הבאה? צטט בקצרה.
 
-### 5. My commitments — tasks to complete
+### 3. לשימור (3 נקודות)
+### 4. לשיפור (3 נקודות)
+
+### 5. ההתחייבויות שלי — משימות להשלמה
 List every promise I made to students during the lecture, for example a question I could not answer and said \
-I would get back to them with an answer. Write each one as a task: "☐ …". Write "None found" if there are none.
+I would get back to them with an answer. Write each one as a task: "☐ …". Write "לא נמצאו" if there are none.
 
 Rules:
 - Be brief. No long explanations and no summary of the lecture content.
 - Never guess or invent. If something cannot be determined from the transcript, say so. For example, if the \
-transcript does not show who is speaking, say that student questions cannot be counted reliably.
+transcript does not show who is speaking, say that student questions cannot be counted reliably, and do not \
+present an estimate as a count.
 - If the transcript seems broken, incomplete or too poor to answer these questions, say that clearly instead of \
 giving feedback."""
 
@@ -119,14 +123,23 @@ def teaching_feedback(transcript: str, llm: LLMClient) -> dict:
         raise ValueError("The transcript is empty")
     stats = speaking_stats(text, cues)
     stats_md = _stats_markdown(stats)
+    if not cues:
+        stats_md += "\n- *Pace and pauses need a .vtt/.srt file with timings — this transcript has none.*"
     if not isinstance(llm, OfflineClient):
         try:
             report = llm.complete(TEACHING_FEEDBACK_PROMPT, f"Measured statistics:\n{stats_md}\n\nTranscript:\n{text}")
-            return {"engine": llm.name, "report": f"### Measured\n{stats_md}\n\n### Feedback\n{report}",
-                    "stats": stats, "note": note}
+            return {"engine": llm.name, "stats": stats, "note": note,
+                    "report": f"{_model_line(llm.name)}\n\n### Measured\n{stats_md}\n\n### Feedback\n{report}"}
         except Exception as e:  # no internet in class, bad key → still show the measured part
             note = (note + " " if note else "") + f"AI unavailable ({e.__class__.__name__}); measured statistics only."
-    return {"engine": OfflineClient().name, "report": f"### Measured\n{stats_md}", "stats": stats, "note": note}
+    engine = OfflineClient().name
+    return {"engine": engine, "report": f"{_model_line(engine, note)}\n\n### Measured\n{stats_md}",
+            "stats": stats, "note": note}
+
+
+def _model_line(engine: str, note: str = "") -> str:
+    """Every saved AI report says which model produced it (SRS FR-7.6a), so it can be judged later."""
+    return f"**Model:** {engine}" + (f" — {note}" if note else "")
 
 
 # ------------------------------------------------------------------ student summary (Could, FR-7.10)
@@ -164,11 +177,12 @@ def student_summary(transcript: str, llm: LLMClient) -> dict:
                 "Summarize this university lecture transcript for students who missed the class, in the language "
                 "of the transcript. Short Markdown: a 2-sentence overview, 'Key points' (bullets), 'Terms to know'.",
                 text)
-            return {"engine": llm.name, "report": summary, "note": note}
+            return {"engine": llm.name, "report": f"{_model_line(llm.name)}\n\n{summary}", "note": note}
         except Exception as e:
             note = (note + " " if note else "") + f"AI unavailable ({e.__class__.__name__}); offline summary shown."
-    report = "**Key sentences**\n" + "\n".join(f"- {b}" for b in extractive_summary(text))
-    return {"engine": OfflineClient().name, "report": report, "note": note}
+    engine = OfflineClient().name
+    report = f"{_model_line(engine, note)}\n\n**Key sentences**\n" + "\n".join(f"- {b}" for b in extractive_summary(text))
+    return {"engine": engine, "report": report, "note": note}
 
 
 # ------------------------------------------------------------------ feature 5: homework review
