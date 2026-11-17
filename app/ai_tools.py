@@ -75,27 +75,41 @@ def _stats_markdown(s: dict) -> str:
         lines.append(f"- **Length:** {s['minutes']} min · **Pace:** {s.get('words_per_minute')} words/min "
                      "(≈120–160 is comfortable)")
         lines.append(f"- **Longest stretch without a pause:** {s['longest_stretch_min']} min")
-    lines.append(f"- **Questions asked:** {s['questions_asked']}")
+    lines.append(f"- **Question marks in the transcript:** {s['questions_asked']} (lecturer and students together)")
     top = ", ".join(f"“{f}” ×{n}" for f, n in list(s["fillers"].items())[:6]) or "none found"
     lines.append(f"- **Filler words:** {s['filler_total']} ({top})")
     return "\n".join(lines)
 
 
 # ------------------------------------------------------------------ feature 4: teaching feedback (lecturer only)
-# TODO(you + partner): the ready-made prompt (SRS FR-7.6, open issue OI-3). This is the heart of feature 4 —
-# it decides what the lecturer actually learns about their teaching. The draft below works; make it yours:
-#   - Which aspects matter most to a lecturer? (clarity, pace, examples, engagement, structure, language?)
-#   - How short is "short"? The lecturer said long reports are not read.
-#   - Tone: a colleague's honest notes, or a gentle coach?
-#   - Should it quote exact moments ("at 00:23 you said…") so feedback is concrete?
-TEACHING_FEEDBACK_PROMPT = """You are an experienced teaching coach. You receive the transcript of one university \
-lecture and statistics measured from it. Write SHORT feedback for the lecturer (max 200 words, Markdown), \
-in the language of the transcript:
-1. **What worked** — 2 bullets.
-2. **What to improve** — 3 bullets, each concrete and actionable (pace, clarity, examples, filler words, \
-long monologues without a question to the class).
-3. **One thing to try next lecture.**
-Be specific and kind. Do not summarize the lecture content."""
+# The ready-made prompt (SRS FR-7.6, decision D-17). Written by the team: it defines what the lecturer
+# learns about their own teaching. Reply language follows the transcript; the report must stay short and honest.
+TEACHING_FEEDBACK_PROMPT = """You receive the transcript of one university lecture that I (the lecturer) gave, \
+plus a few statistics measured from it. Give me feedback on my teaching, in the language of the transcript, \
+in short Markdown, using exactly these sections:
+
+### 1. Student questions
+- How many questions students asked, and how many of them I actually answered.
+- How many times I postponed or cut off a student's question to move on or because of time.
+
+### 2. Overall
+- **Examples:** were there enough examples?
+- **Clarity and order:** was the lecture delivered properly and clearly, in a sensible teaching order?
+- **Professional mistakes:** did I say anything wrong that I should correct next time? Quote it briefly.
+
+### 3. Keep (3 points)
+### 4. Improve (3 points)
+
+### 5. My commitments — tasks to complete
+List every promise I made to students during the lecture, for example a question I could not answer and said \
+I would get back to them with an answer. Write each one as a task: "☐ …". Write "None found" if there are none.
+
+Rules:
+- Be brief. No long explanations and no summary of the lecture content.
+- Never guess or invent. If something cannot be determined from the transcript, say so. For example, if the \
+transcript does not show who is speaking, say that student questions cannot be counted reliably.
+- If the transcript seems broken, incomplete or too poor to answer these questions, say that clearly instead of \
+giving feedback."""
 
 
 def teaching_feedback(transcript: str, llm: LLMClient) -> dict:
