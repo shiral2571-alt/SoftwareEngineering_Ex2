@@ -112,7 +112,20 @@ async function refresh() {
   renderCheckin(L);
   renderPolls(L.polls);
   renderForum(L.forum);
-  $("matList").innerHTML = L.materials.length ? L.materials.map(m => `<details class="post"><summary>📄 ${esc(m.title)}</summary><div class="md small">${md(m.content)}</div></details>`).join("")
+  renderMaterials(L.materials);
+}
+
+// ---------- materials ----------
+// The page refreshes every 3 s. Rebuilding the list would close any item the student opened,
+// so rebuild only when the materials changed, and keep open items open.
+let lastMaterials = "";
+function renderMaterials(materials) {
+  const key = JSON.stringify(materials);
+  if (key === lastMaterials) return;
+  lastMaterials = key;
+  const opened = new Set([...$("matList").querySelectorAll("details[open]")].map(d => d.dataset.id));
+  $("matList").innerHTML = materials.length ? materials.map(m => `<details class="post" data-id="${m.id}" ${opened.has(String(m.id)) ? "open" : ""}>
+      <summary>📄 ${esc(m.title)}</summary><div class="md small">${md(m.content)}</div></details>`).join("")
     : '<p class="muted">Nothing shared yet.</p>';
 }
 
