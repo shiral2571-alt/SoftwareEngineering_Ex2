@@ -11,6 +11,7 @@ from pathlib import Path
 from flask import Flask, jsonify
 
 from . import db as dbmod
+from .app_settings import AppSettings
 from .attendance import AttendanceService
 from .forum import ForumService
 from .identity import DeviceRegistry
@@ -34,6 +35,7 @@ class Services:
     forum: ForumService
     materials: MaterialService
     llm_settings: LLMSettings
+    app_settings: AppSettings
     llm_override: object = None  # tests inject a fake LLM here
 
     def llm(self):
@@ -51,7 +53,9 @@ def create_app(db_path: str = "teaching_tool.db", lecturer_pin: str | None = Non
     svc = Services(courses=CourseService(conn), roster=roster, devices=DeviceRegistry(conn, roster),
                    lectures=LectureService(conn), attendance=AttendanceService(conn), polls=PollService(conn),
                    forum=ForumService(conn), materials=MaterialService(conn), llm_settings=LLMSettings(conn),
-                   llm_override=llm)
+                   app_settings=AppSettings(conn), llm_override=llm)
+    if os.environ.get("PUBLIC_URL"):  # e.g. set by the start script from the tunnel address
+        svc.app_settings.set_public_url(os.environ["PUBLIC_URL"])
     if not svc.courses.all() and SAMPLE_ROSTER.exists():  # first run: a demo course with a fictional roster
         cid = svc.courses.create("Intro to Software Engineering")
         roster.import_into(cid, CsvRosterSource(SAMPLE_ROSTER.read_text(encoding="utf-8")))

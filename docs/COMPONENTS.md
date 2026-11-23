@@ -109,7 +109,7 @@ A `POST.student_id` is **NULL** for anonymous posts (D-8). `SETTINGS` holds the 
 | Flask | 3.1 | Web server | ✅ |
 | SQLite | built in | Storage | ✅ |
 | openpyxl | 3.1 | Excel import and export | ✅ (tests) |
-| qrcode-generator | 1.4.4 | QR codes | ⚠️ Renders correctly; a phone scan through the tunnel is still to be confirmed |
+| qrcode-generator | 1.4.4 | QR codes | ✅ Scanned by two phones (university Wi-Fi and mobile data) |
 | Cloudflare quick tunnel | cloudflared | HTTPS for phones | ✅ (with a network caveat) |
 | google-genai | 3.3 | Gemini | ✅ Real lecture transcript |
 | anthropic / openai | 2.8 / 3.51 | Claude / OpenAI | ⚠️ Code path only, no key available |

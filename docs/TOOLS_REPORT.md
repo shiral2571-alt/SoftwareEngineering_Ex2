@@ -45,8 +45,9 @@ For each tool: why we chose it, the alternatives, **what we tested in real life 
 | Phone opens the app and grants the mic over the tunnel | ✅ Works |
 | Tunnel lifetime | ⚠️ The address changes on every run, and quick tunnels sometimes expire ("Tunnel not found"). Restarting fixes it |
 | A different network (11-16) | ❌ The laptop's network DNS could not resolve `*.trycloudflare.com`, although the tunnel worked from outside. Phones on mobile data worked |
+| **University Wi-Fi and mobile data (11-23)** | ✅ Both phones reached the app through the tunnel |
 
-**Impact:** the lecturer dashboard runs on `localhost`, and phones use mobile data. A backup network (phone hotspot) is in the demo plan (SoW R-2). The *Join QR* always encodes the current address, so a changing address is not a problem.
+**Impact:** the lecturer dashboard runs on `localhost`, and **every QR code uses a saved public address** (the tunnel link, D-21), so QR check-in works even when the laptop cannot open the tunnel itself. Phones use mobile data. A backup network (phone hotspot) is in the demo plan (SoW R-2). The *Join QR* always encodes the current address, so a changing address is not a problem.
 
 ## 3. Web framework and storage: Flask + SQLite
 **Why:** Flask is minimal, easy to read and easy to test with `test_client()`. SQLite needs no server: a single file. **Alternatives:** Django (too heavy for KISS), FastAPI (async adds complexity we did not need).
@@ -54,7 +55,7 @@ For each tool: why we chose it, the alternatives, **what we tested in real life 
 **Live updates:** short polling every 2–3 s instead of WebSockets (D-13). Simpler, and it works through the tunnel. **Real-life finding:** polling rebuilt the materials list every 3 s, so items the student opened kept closing on the phone. Fixed by rebuilding only when the data changes.
 
 ## 4. QR codes: qrcode-generator 1.4.4 (JS)
-**Why:** it draws the QR in the browser, with no server image generation. **Tested:** the QR renders, encodes the current tunnel address, and rotates every 15 s. A phone-camera scan through the tunnel is still to be confirmed in the demo rehearsal.
+**Why:** it draws the QR in the browser, with no server image generation. **Tested (2026-11-23):** two phones, one on the **university Wi-Fi** and one on **mobile data**, scanned the **check-in QR** with the camera. Both opened the app, registered and were **checked in by QR** ✅ (recorded as method `qr`, 11 s apart). The lecturer page ran on `localhost`, and the QR pointed to the saved public address (D-21). The check-in QR changes every 15 s, and each code is accepted for 30 s.
 
 ## 5. Spreadsheets: openpyxl
 **Why:** reads the lecturer's xlsx class list and writes the offline Excel sheet. **Tested:** xlsx import with Hebrew headers, and export (overview, one sheet per lecture, polls, forum), in automated tests.
@@ -85,6 +86,6 @@ For each tool: why we chose it, the alternatives, **what we tested in real life 
 |---|---|---|
 | ~~The lecture hall, back row~~ | ✅ Done 11-23 (T11–T12): audible works from the back of the empty hall, ultrasound does not | — |
 | The lecture hall **with students present** | T11 was in an empty, quiet hall | Every phone checks in within 30 s; otherwise switch to QR |
-| QR scan from a phone through the tunnel | Not yet confirmed | The scan opens the app and checks in |
+| ~~QR scan from a phone~~ | ✅ Done 11-23: two phones (university Wi-Fi and mobile data) scanned the check-in QR and were checked in | — |
 | 3–5 phones at once | A small load test | Everyone checks in; the counter is correct |
 | *(Optional)* The sound relayed over a WhatsApp call | The relay risk E13 | Record whether it decodes. Either result goes into this report |

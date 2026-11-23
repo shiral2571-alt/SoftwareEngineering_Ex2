@@ -135,6 +135,7 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 | FR-4.4a | **Get ready early:** while the lecture is open, the student can tap *Get ready to check in* **before** the lecturer starts the sound. The phone then waits for up to 2 minutes (with a countdown and a *Stop listening* button), so the first broadcast is not missed (D-16) | Must | ✅ |
 | FR-4.5 | **Audible sound by default.** Ultrasound is an option in Settings (§7, D-2) | Must | ✅ |
 | FR-4.6 | **QR check-in:** the projector shows a QR code that changes every ~15 s; students scan it with the phone camera | Must | ✅ |
+| FR-4.6a | **Phone address:** the lecturer saves the public https:// address (e.g. the tunnel link) in Settings, or the start script passes it as `PUBLIC_URL`. Every QR code points there, so the laptop can keep using `localhost` (D-21) | Must | ✅ |
 | FR-4.7 | Tokens are short-lived (≈20 s sound, ≈30 s QR) and valid only for the current lecture. The server rejects unknown, expired or foreign tokens | Must | ✅ |
 | FR-4.8 | **Statuses:** *Present* (checked in during a window), *Late*, *Absent*. **Late is set only by the lecturer, by hand.** The lecturer can change any status manually, also after the lecture is closed | Must | ✅ |
 | FR-4.9 | A phone that already checked in a student in this lecture cannot switch to another name in the same lecture | Must | ✅ |
@@ -265,6 +266,7 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 | D-18 | 2026-11-17 | Teaching feedback is always in Hebrew; the prompt gives Hebrew section headings. Every AI report names its model (FR-7.6a) | First real test (Gemini 3.5 Flash-Lite, real lecture transcript) answered in English although asked for "the language of the transcript". Small models copy the language of the headings. The team will use the model it has, so the prompt must compensate. Naming the model makes results comparable in the Tools Report |
 | D-19 | 2026-11-23 | Homework review from GitHub links (FR-7.15) moved from Should to Won't (now) | Two days before the deadline, the documents had priority. Review from uploaded files already demonstrates feature 5 |
 | D-20 | 2026-11-23 | A live relay of the check-in code (E13) is an accepted risk | Codes already stop *replay* (recordings, photos). Stopping a live *relay* would need location checks that the web cannot do reliably. The effort for a cheater is high, and the lecturer can compare counts |
+| D-21 | 2026-11-23 | QR codes use a saved **public address** instead of the page's own address (FR-4.6a) | On one network the laptop could not open the tunnel address, so it ran on `localhost`, and QR codes for `localhost` cannot work on phones. With a saved address, the QR works even where the laptop is blocked, which reduces demo risk R-2 |
 | D-16 | 2026-11-17 | Students can **get ready before** the lecturer starts the sound (FR-4.4a), with a 2-minute limit | Real-phone test: the *Check in* button appeared only after the sound had started, so the first broadcast was missed and the flow felt clumsy. Listening early fixes this, and the time limit keeps the privacy promise (NFR-4) |
 
 ---

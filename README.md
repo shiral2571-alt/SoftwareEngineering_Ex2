@@ -49,7 +49,7 @@ Phones need HTTPS for the microphone, so open a tunnel in a second terminal:
 ```bash
 cloudflared tunnel --url http://localhost:5000
 ```
-Open the dashboard on the laptop **through the `https://…trycloudflare.com` link**, so the QR codes point to an address phones can reach.
+Then paste the `https://…trycloudflare.com` link in **⚙ Settings → Phone address**, or start the server with `PUBLIC_URL` set to it. Every QR code points there, so the laptop can stay on `localhost`.
 
 ## Demo script (10 min)
 1. **Course list:** import the class list (CSV/xlsx with a `name` column), or keep the sample course.

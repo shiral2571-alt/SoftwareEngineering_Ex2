@@ -192,6 +192,11 @@
       <button class="small-btn" id="clearKeyBtn">Remove key</button>
     </div>
     <p class="small" id="aiMsg"></p>
+    <h2 style="margin-top:14px">📱 Phone address</h2>
+    <label for="publicUrl">The https:// link phones use (e.g. the tunnel link). Every QR code points here.</label>
+    <div class="row"><input id="publicUrl" class="grow" placeholder="https://….trycloudflare.com">
+      <button class="small-btn" id="savePublicBtn">Save</button></div>
+    <p class="small" id="publicMsg"></p>
     <h2 style="margin-top:14px">🔊 Check-in sound</h2>
     <label for="protocol">Sound</label>
     <select id="protocol">
@@ -319,7 +324,7 @@ async function playToken() {
 }
 async function showRotatingQr() {
   const r = await api(`/api/l/lectures/${lectureId}/token`, {});
-  if (r.token) showQr("Scan to check in", `${location.origin}/j/${r.token}`, true);
+  if (r.token) showQr("Scan to check in", `${phoneBase()}/j/${r.token}`, true);
 }
 function syncBroadcast(win) {
   // Keep the laptop loop in line with the server's window state (also after a page reload).
@@ -337,10 +342,15 @@ function stopBroadcast() {
 }
 
 // ---------- QR overlays ----------
+// QR codes must point to an address phones can reach (FR-4.6a). Use the public address saved in Settings;
+// otherwise this page's own address, unless that is localhost.
+let publicUrl = "";
 const isLocal = () => /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+const phoneBase = () => publicUrl || (isLocal() ? "" : location.origin);
+async function loadPublicUrl() { publicUrl = (await api("/api/l/public-url")).public_url || ""; }
 function localWarning() {
-  if (!isLocal()) return false;
-  alert("Phones can't open a localhost address. Open this dashboard through the https:// tunnel link and try again.");
+  if (phoneBase()) return false;
+  alert("Phones can't open a localhost address. Paste the https:// tunnel link in ⚙ Settings → Phone address, then try again.");
   return true;
 }
 function showQr(title, url, checkin) {
@@ -350,7 +360,7 @@ function showQr(title, url, checkin) {
   $("ovEnd").classList.toggle("hidden", !checkin);
   $("overlay").classList.remove("hidden");
 }
-$("joinQrBtn").onclick = () => { if (!localWarning()) showQr("Scan to open the class app", location.origin + "/", false); };
+$("joinQrBtn").onclick = () => { if (!localWarning()) showQr("Scan to open the class app", phoneBase() + "/", false); };
 $("ovHide").onclick = () => $("overlay").classList.add("hidden");
 
 // ---------- attendance sheet ----------
@@ -532,6 +542,7 @@ async function openSettings() {
   fillModels(settings.model);
   $("keyMask").textContent = settings.key_set ? `(saved: ${settings.key_mask})` : "(none saved)";
   $("apiKey").value = ""; $("aiMsg").textContent = "";
+  $("publicUrl").value = publicUrl; $("publicMsg").textContent = "";
   $("settingsModal").classList.remove("hidden");
 }
 function fillModels(selected) {
@@ -589,6 +600,13 @@ async function refresh() {
   syncBroadcast(win);
   renderSheet(); renderPolls(); renderForum(); renderMaterials();
 }
+$("savePublicBtn").onclick = async () => {
+  const r = await api("/api/l/public-url", { public_url: $("publicUrl").value });
+  $("publicMsg").className = "small " + (r.ok ? "ok" : "bad");
+  $("publicMsg").textContent = r.ok ? (r.public_url ? `Saved — QR codes now point to ${r.public_url}` : "Cleared.") : "⚠ " + r.error;
+  if (r.ok) { publicUrl = r.public_url; $("publicUrl").value = r.public_url; }
+};
+loadPublicUrl();
 loadCourses();
 setInterval(() => { if (lectureId && $("settingsModal").classList.contains("hidden")) refresh(); }, 2500);
 </script>

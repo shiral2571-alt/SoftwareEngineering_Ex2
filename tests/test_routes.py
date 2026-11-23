@@ -164,3 +164,13 @@ def test_excel_download(lecturer):
     new_open_lecture(lecturer)
     r = lecturer.get(f"/api/l/courses/{course_id(lecturer)}/export.xlsx")
     assert r.status_code == 200 and r.data[:2] == b"PK"  # xlsx is a zip file
+
+
+def test_public_address_for_qr_codes(app, lecturer):
+    # FR-4.6a: QR codes use a saved https address, so the laptop can stay on localhost.
+    assert lecturer.get("/api/l/public-url").json["public_url"] == ""
+    r = lecturer.post("/api/l/public-url", json={"public_url": " https://abc-def.trycloudflare.com/lecturer?x=1 "})
+    assert r.json["public_url"] == "https://abc-def.trycloudflare.com"          # only the origin is kept
+    assert lecturer.post("/api/l/public-url", json={"public_url": "http://abc.com"}).status_code == 400  # no mic on http
+    assert lecturer.post("/api/l/public-url", json={"public_url": ""}).json["public_url"] == ""
+    assert app.test_client().get("/api/l/public-url").status_code == 401        # lecturer only

@@ -44,7 +44,7 @@ The classes are those in [COMPONENTS.md](COMPONENTS.md) and [DIAGRAMS.md](DIAGRA
 |---|---|---|
 | `sound.js`, ggwave over the air | Needs a speaker, air and a microphone | Real phone tests: audible ✅, ultrasound ❌, *get ready early* ✅; **real auditorium, back row: audible ✅, ultrasound ❌** (empty hall) |
 | Mic opening and closing on iOS/Android | Browser permission UI | Real phone: the mic indicator disappears after check-in ✅ |
-| QR scan with a phone camera | Needs a camera | Demo rehearsal |
+| QR scan with a phone camera | Needs a camera | ✅ Two phones (university Wi-Fi and mobile data) scanned the check-in QR and were checked in |
 | Real LLM output quality | Paid, non-deterministic | Gemini 3.5 Flash-Lite on a real lecture transcript ✅ (structure, honesty, Hebrew after D-18) |
 | Page refresh behaviour (polling) | UI timing | Found by a real phone test: materials closed every 3 s. Fixed and re-checked in the browser |
 | Load: 40 phones at once | Needs many devices | Partly: each check-in is one small request; rehearse with 3–5 phones (risk noted in the SoW) |

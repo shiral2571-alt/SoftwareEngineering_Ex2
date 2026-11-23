@@ -296,6 +296,20 @@ def register(app, svc):
         except ValueError as e:
             abort(400, str(e))
 
+    # ------------------------------------------------------------------ public address for phones (FR-4.6a)
+    @app.get("/api/l/public-url")
+    @lecturer_only
+    def public_url_get():
+        return jsonify(public_url=svc.app_settings.public_url())
+
+    @app.post("/api/l/public-url")
+    @lecturer_only
+    def public_url_set():
+        try:
+            return jsonify(ok=True, public_url=svc.app_settings.set_public_url(body().get("public_url", "")))
+        except ValueError as e:
+            abort(400, str(e))
+
     # ------------------------------------------------------------------ AI settings (FR-7.1–7.3)
     @app.get("/api/l/settings")
     @lecturer_only

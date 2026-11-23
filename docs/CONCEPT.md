@@ -110,6 +110,10 @@ Spike page for these tests: `spike/sound-test/index.html` (has a built-in test l
 - Registration, microphone and check-in worked end to end. ✅
 - Reception worked **only very close to the laptop**. App defaults were used: ultrasound, Volume 50. Exact distance and phone model were not recorded.
   → Next: measure with Volume 100 and with Audible, and try the room's speakers (HDMI or projector audio) instead of the laptop speaker.
+### QR test (2026-11-23)
+- The lecturer page on `localhost`; the QR uses the saved public address (D-21).
+- **Two phones**, one on the university Wi-Fi and one on mobile data, scanned the **check-in QR**, opened the app, registered and were **checked in by QR** ✅.
+
 ### Lecture-hall test (2026-11-23)
 - The real auditorium: laptop at the lecturer's desk, **iPhone 17 Pro Max** at the back of the hall (the full depth).
 - **Audible: received ✅. Ultrasound: not received ❌.**
