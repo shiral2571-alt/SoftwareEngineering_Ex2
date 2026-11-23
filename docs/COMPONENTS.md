@@ -51,9 +51,12 @@ flowchart TB
 | C10 | **Polls** | `polls.py` | Multi-question polls (quiz, choice, text), launch and close, answers, results, file import and template | Ours |
 | C11 | **Forum** | `forum.py` | Posts (named or fully anonymous), replies, 👍, delete | Ours |
 | C12 | **AI gateway** | `llm.py` | The `LLMClient` interface + Claude, Gemini, OpenAI and offline clients; the settings store, with the key kept server-side | **Composed:** anthropic, google-genai, openai SDKs |
-| C13 | **AI features** | `ai_tools.py` | Teaching feedback (our prompt + measured stats), student summary, homework review + similarity | Ours (+ difflib) |
+| C13 | **AI features** | `ai_tools.py` | Teaching feedback (our prompt + measured stats) and the student summary | Ours |
 | C14 | **Export** | `export.py` | Excel workbook per course | **Composed:** openpyxl |
 | C15 | **Persistence** | `db.py` | SQLite schema and connection | **Composed:** SQLite |
+| C16 | **Homework** | `homework.py` | Assignments (with an optional deadline), student submissions (the latest counts), peer selection (5 most recent, no names), the student review prompt | Ours |
+| C17 | **File reader** | `textfiles.py` | Word (.docx, read directly from its XML), PDF, text and code → plain text | Ours (+ pypdf) |
+| C18 | **App settings** | `app_settings.py` | The public phone address for QR codes | Ours |
 
 ## 3. Component dependencies
 ```mermaid
@@ -99,6 +102,9 @@ erDiagram
     POST ||--o{ REPLY : has
     POST ||--o{ UPVOTE : gets
     LECTURE ||--o{ MATERIAL : has
+    COURSE ||--o{ ASSIGNMENT : has
+    ASSIGNMENT ||--o{ SUBMISSION : receives
+    STUDENT ||--o{ SUBMISSION : submits
 ```
 A `POST.student_id` is **NULL** for anonymous posts (D-8). `SETTINGS` holds the AI provider, the model and the key.
 
@@ -113,4 +119,5 @@ A `POST.student_id` is **NULL** for anonymous posts (D-8). `SETTINGS` holds the 
 | Cloudflare quick tunnel | cloudflared | HTTPS for phones | ✅ (with a network caveat) |
 | google-genai | 3.3 | Gemini | ✅ Real lecture transcript |
 | anthropic / openai | 2.8 / 3.51 | Claude / OpenAI | ⚠️ Code path only, no key available |
-| pytest | 9.0 | Tests | ✅ 49 tests |
+| pypdf | 7.0 | Reading PDF homework | ⚠️ Code path only; Word and text are unit-tested, PDF is to be tried in the demo |
+| pytest | 9.0 | Tests | ✅ 54 tests |

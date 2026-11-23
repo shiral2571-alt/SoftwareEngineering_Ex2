@@ -31,7 +31,7 @@ Attendance is the main feature. Taking it by hand wastes class time. The usual d
 | Courses | Several courses, each with its own roster (CSV or xlsx, **names only**) |
 | Polls | Sets of questions: quiz (correct answer), multiple choice, free text. Prepared in advance, or imported from a template |
 | Forum | Per lecture: named or fully anonymous posts, lecturer replies, 👍, delete |
-| AI | Teaching feedback from a transcript, a student summary, and homework review with a similarity table. The provider (Claude, Gemini or OpenAI) is selectable |
+| AI | Teaching feedback from a transcript; a student summary; **assignments with deadlines that students submit to, each getting an AI review compared with the class** (code, Word, PDF), with every submission and review visible to the lecturer. The provider (Claude, Gemini or OpenAI) is selectable |
 | Documents | README, SoW, SRS, use cases, components, class and sequence diagrams, testing strategy, tools report, conclusions |
 | Demo | A 10-minute live demo with real phones |
 

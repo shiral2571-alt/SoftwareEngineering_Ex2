@@ -21,14 +21,14 @@ flowchart LR
         UC8[UC-8 Ask in the forum]
         UC9[UC-9 Answer the forum]
         UC10[UC-10 Get teaching feedback]
-        UC11[UC-11 Review homework]
         UC12[UC-12 Configure AI]
         UC13[UC-13 Export the spreadsheet]
+        UC14[UC-14 Submit homework and get a review]
     end
-    L --- UC1 & UC2 & UC5 & UC6 & UC9 & UC10 & UC11 & UC12 & UC13
-    S --- UC3 & UC4 & UC7 & UC8
+    L --- UC1 & UC2 & UC5 & UC6 & UC9 & UC10 & UC12 & UC13
+    S --- UC3 & UC4 & UC7 & UC8 & UC14
     UC10 --- AI
-    UC11 --- AI
+    UC14 --- AI
 ```
 
 ---
@@ -128,13 +128,22 @@ flowchart LR
 **Alternatives:** no key or no internet → only the measured statistics are shown (E10). A poor transcript → the model is instructed to say so rather than guess.
 **Covers:** FR-7.5–7.7, FR-7.6a, FR-7.6b, FR-7.12
 
-## UC-11 Review homework
-**Story:** *As a lecturer, I want a first review of every submission and a comparison between students.*
-1. The lecturer uploads all the submissions (one file per student) and, optionally, the assignment text.
-2. The system shows a **similarity table**, which is deterministic. Pairs at 85% or above are flagged "check", never as an automatic verdict.
-3. The AI writes a short review for each student and a class comparison.
+## UC-14 Submit homework and get a review (student)
+**Story:** *As a student, I want feedback on my homework before the lecturer grades it, and to know how my work compares with the class, without seeing anyone else's work.*
+1. The lecturer publishes an assignment in the course, with an optional deadline (📝 Assignments).
+2. The student opens **📝 Homework** on the phone, reads the assignment and uploads their work (Word, PDF, text or code).
+3. The AI receives the assignment, this work and up to 5 recent submissions of others, without names.
+4. The student gets a review in Hebrew: meeting the requirements, strengths, what to improve, and **compared with the class** in general terms.
+5. The lecturer sees all submissions with their dates, late flags and reviews.
 
-**Covers:** FR-7.13, FR-7.14
+**Alternatives:**
+- Submitting again replaces the work and shows the new date (FR-7.20).
+- After the deadline, the work is accepted and marked late.
+- An unsupported file (e.g. a photo) gets a clear error.
+- No AI key → the work is still submitted, with a note.
+- Fewer than 2 other submissions → the review says the comparison is limited.
+
+**Covers:** FR-7.16–7.21
 
 ## UC-12 Configure AI
 **Story:** *As a lecturer, I want to use the AI provider I already have.*

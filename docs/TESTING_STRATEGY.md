@@ -12,8 +12,8 @@ The classes are those in [COMPONENTS.md](COMPONENTS.md) and [DIAGRAMS.md](DIAGRA
 ## 2. Test levels
 | Level | What | How | Where |
 |---|---|---|---|
-| **Unit** | One service class with its rules | `pytest`; an in-memory SQLite database (`:memory:`); an injected **FakeClock** for anything time-based | `tests/test_services.py` (35 tests) |
-| **Integration (API)** | A full flow through HTTP, the same calls the phone and dashboard make | Flask `test_client()`, a temporary database file, a fake LLM | `tests/test_routes.py` (14 tests) |
+| **Unit** | One service class with its rules | `pytest`; an in-memory SQLite database (`:memory:`); an injected **FakeClock** for anything time-based | `tests/test_services.py` (38 tests) |
+| **Integration (API)** | A full flow through HTTP, the same calls the phone and dashboard make | Flask `test_client()`, a temporary database file, a fake LLM | `tests/test_routes.py` (16 tests) |
 | **Manual, in real life** | Sound between devices, phone browsers, mic permission, QR scan, the large hall, real AI output | Checklists with recorded results | [TOOLS_REPORT.md](TOOLS_REPORT.md), [CONCEPT.md §8](CONCEPT.md) |
 | **Demo rehearsal** | The whole 10-minute script with 3–5 phones | The README demo script | Before the class demo |
 
@@ -35,9 +35,12 @@ The classes are those in [COMPONENTS.md](COMPONENTS.md) and [DIAGRAMS.md](DIAGRA
 | `PollService`, `Question` (C10) | Quiz, choice and text in one poll; one answer each; % correct; validation; drafts and closed polls can't be answered; correct answer shown only if allowed and answered; template round trip; bad row reported | `test_poll_with_several_question_kinds`, `test_quiz_validation`, `test_draft_and_closed_polls_cannot_be_answered`, `test_correct_answer_shown_only_if_allowed_and_answered`, `test_poll_import_template_round_trip`, `test_poll_import_reports_the_bad_row`, `test_poll_prepared_in_draft_then_answered` | FR-5.1–5.8 |
 | `ForumService` (C11) | **Anonymous stores NULL** (checked in the database); replies; 👍 toggle; most-voted first; delete; an absent student can still post | `test_forum_anonymous_is_fully_anonymous`, `test_forum_reply_upvote_order_and_delete`, `test_forum_round_trip`, `test_absent_student_can_still_participate` | FR-6.1–6.5, FR-4.12, NFR-5, E8, E11 |
 | `LLMSettings`, `LLMClient` subclasses (C12) | **The key is never returned** (service and HTTP); masked; an empty field keeps the key; switching provider drops the key; unknown provider rejected | `test_api_key_is_never_returned`, `test_settings_never_expose_the_key` | FR-7.1–7.3, NFR-6 |
-| `ai_tools` (C13) | Transcript parsing (VTT timings); pace, filler words and questions; offline report; **the model name is shown**; **Hebrew requested**; fallback when the provider fails; similarity ignores comments; extractive summary | `test_transcript_parsing_and_stats`, `test_teaching_feedback_offline_and_empty`, `test_teaching_feedback_names_the_model_and_asks_for_hebrew`, `test_ai_falls_back_when_the_provider_fails`, `test_similarity_ignores_comments_and_whitespace`, `test_extractive_summary_keeps_order_and_limit` | FR-7.4–7.7, 7.6a, 7.6b, 7.13, 7.14, E10 |
+| `ai_tools` (C13) | Transcript parsing (VTT timings); pace, filler words and questions; offline report; **the model name is shown**; **Hebrew requested**; fallback when the provider fails; extractive summary | `test_transcript_parsing_and_stats`, `test_teaching_feedback_offline_and_empty`, `test_teaching_feedback_names_the_model_and_asks_for_hebrew`, `test_ai_falls_back_when_the_provider_fails`, `test_extractive_summary_keeps_order_and_limit` | FR-7.4–7.7, 7.6a, 7.6b, E10 |
+| `AssignmentService`, `review_submission` (C16) | The assignment needs its text; resubmitting replaces the work and shows the latest date; late flag after the deadline; at most 5 peers, most recent first, never the student's own; the prompt gets the assignment, the work and the peers, and demands Hebrew, no revealing and no grade; offline note; the lecturer sees names; students are limited to their courses | `test_assignment_submit_resubmit_and_deadline`, `test_peers_are_limited_and_exclude_the_student`, `test_student_review_sees_assignment_and_peers_without_names`, `test_student_submits_homework_and_lecturer_sees_it` | FR-7.16–7.21 |
+| `textfiles` (C17) | Word read by paragraphs (Hebrew); text and code; unsupported and broken files rejected | `test_extract_text_from_word_text_and_code` | FR-7.17 |
 | `ExcelExporter` (C14) | Sheet names; drafts excluded; Present and Late in the overview; a valid xlsx download | `test_excel_export`, `test_excel_download` | FR-4.11 |
 | Web API (C5) | The lecturer PIN is required; wrong PIN refused | `test_lecturer_api_requires_pin` | FR-1.1, NFR-6 |
+| `AppSettings` (C5) | The phone address is saved as an https origin only; http is rejected; it can be cleared; lecturer only | `test_public_address_for_qr_codes` | FR-4.6a, D-21 |
 
 ## 4. What is not automated, and how it is covered
 | Area | Why not automated | Real-life test |
@@ -46,6 +49,7 @@ The classes are those in [COMPONENTS.md](COMPONENTS.md) and [DIAGRAMS.md](DIAGRA
 | Mic opening and closing on iOS/Android | Browser permission UI | Real phone: the mic indicator disappears after check-in ✅ |
 | QR scan with a phone camera | Needs a camera | ✅ Two phones (university Wi-Fi and mobile data) scanned the check-in QR and were checked in |
 | Real LLM output quality | Paid, non-deterministic | Gemini 3.5 Flash-Lite on a real lecture transcript ✅ (structure, honesty, Hebrew after D-18) |
+| Student homework review with a real model | Paid, non-deterministic, needs several students | ⚠️ **Not done.** Only automated tests with fake models (flow, prompt content, privacy rules in the prompt) |
 | Page refresh behaviour (polling) | UI timing | Found by a real phone test: materials closed every 3 s. Fixed and re-checked in the browser |
 | Load: 40 phones at once | Needs many devices | Partly: each check-in is one small request; rehearse with 3–5 phones (risk noted in the SoW) |
 
@@ -53,7 +57,7 @@ The classes are those in [COMPONENTS.md](COMPONENTS.md) and [DIAGRAMS.md](DIAGRA
 ```bash
 py -m pytest -q
 ```
-The expected result is **49 passed** in about 4 seconds. No network, API key or browser is needed.
+The expected result is **54 passed** in about 4 seconds. No network, API key or browser is needed.
 
 ## 6. Rules
 - **Every bug found in real life gets a test, where possible.** Example: the Hebrew-output fix added `test_teaching_feedback_names_the_model_and_asks_for_hebrew`.

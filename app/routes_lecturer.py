@@ -7,12 +7,13 @@ from pathlib import Path
 
 from flask import Response, abort, jsonify, redirect, render_template, request, send_file, session
 
-from .ai_tools import review_homework, student_summary, teaching_feedback
+from .ai_tools import student_summary, teaching_feedback
 from .export import ExcelExporter
 from .lectures import LectureStateError
 from .llm import LLMError, test_connection
 from .polls import Question, parse_poll_file, template_csv
 from .roster import roster_source_for
+from .textfiles import extract_text
 
 
 def register(app, svc):
@@ -286,15 +287,37 @@ def register(app, svc):
                           visible=request.form.get("visible") == "true")
         return jsonify(ok=True, **out)
 
-    @app.post("/api/l/homework")
+    # ------------------------------------------------------------------ assignments (feature 5, FR-7.16–7.21)
+    @app.get("/api/l/courses/<int:course_id>/assignments")
     @lecturer_only
-    def homework():
-        subs = {Path(f.filename).stem: f.read().decode("utf-8", errors="replace")
-                for f in request.files.getlist("files") if f.filename}
+    def assignments_list(course_id):
+        return jsonify(svc.assignments.of_course(course_id))
+
+    @app.post("/api/l/courses/<int:course_id>/assignments")
+    @lecturer_only
+    def assignment_create(course_id):
+        if svc.courses.get(course_id) is None:
+            abort(404, "Course not found")
+        f = request.files.get("file")
         try:
-            return jsonify(ok=True, **review_homework(subs, request.form.get("assignment", ""), svc.llm()))
+            instructions = extract_text(f.filename, f.read()) if f and f.filename else request.form.get("text", "")
+            deadline = float(request.form["deadline"]) if request.form.get("deadline") else None
+            aid = svc.assignments.create(course_id, request.form.get("title", ""), instructions, deadline)
         except ValueError as e:
             abort(400, str(e))
+        return jsonify(ok=True, id=aid)
+
+    @app.get("/api/l/assignments/<int:assignment_id>")
+    @lecturer_only
+    def assignment_detail(assignment_id):
+        a = svc.assignments.get(assignment_id) or abort(404, "Assignment not found")
+        return jsonify(assignment=a, submissions=svc.assignments.submissions(assignment_id))
+
+    @app.post("/api/l/assignments/<int:assignment_id>/delete")
+    @lecturer_only
+    def assignment_delete(assignment_id):
+        svc.assignments.delete(assignment_id)
+        return jsonify(ok=True)
 
     # ------------------------------------------------------------------ public address for phones (FR-4.6a)
     @app.get("/api/l/public-url")

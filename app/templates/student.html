@@ -27,6 +27,30 @@
   <section id="homeView" class="hidden">
     <p>Hi <b id="who"></b></p>
     <div id="lecCards"></div>
+    <h2 style="margin-top:16px">📝 Homework</h2>
+    <div id="hwCards"></div>
+  </section>
+
+  <!-- 4. One assignment: submit and get an AI review (feature 5) -->
+  <section id="hwView" class="hidden">
+    <button class="small-btn" id="hwBackBtn">‹ Back</button>
+    <div class="card" style="margin-top:8px">
+      <h2 id="hwTitle"></h2>
+      <p class="small muted" id="hwMeta"></p>
+      <details><summary class="small">The assignment</summary><div class="md small" id="hwInstr"></div></details>
+    </div>
+    <div class="card">
+      <b id="hwStatus"></b>
+      <label for="hwFile">Your work (Word, PDF, text or code)</label>
+      <input type="file" id="hwFile" accept=".docx,.pdf,.txt,.md,.py,.java,.js,.ts,.c,.cpp,.cs,.html,.css,.sql,.kt,.go,.rb,.php">
+      <button class="primary big" id="hwSubmitBtn" style="margin-top:8px">Submit and get feedback</button>
+      <p class="small muted">The AI sees the assignment, your work and a few other submissions from your class (anonymous)
+        to compare in general terms. It never shows you anyone else's work.</p>
+    </div>
+    <div class="card hidden" id="hwReviewCard">
+      <div class="row"><h2 class="grow" style="margin:0">🤖 Feedback</h2><button class="small-btn" id="hwAgainBtn">↻ Review again</button></div>
+      <div class="md small" id="hwReview"></div>
+    </div>
   </section>
 
   <!-- 3. One lecture -->
@@ -89,6 +113,7 @@ async function home() {
       ${l.checkin ? ' · <b class="ok">check-in is open!</b>' : ""}</div></button>`).join("")
     || '<p class="muted card">No lectures yet. When your lecturer opens one, it appears here.</p>';
   $("lecCards").querySelectorAll(".lec-item").forEach(b => b.onclick = () => openLecture(+b.dataset.id));
+  renderHomeworkList(await api("/api/my/assignments"));
   const open = s.lectures.filter(l => l.state === "open");
   if (open.length === 1 && !home.visited) { home.visited = true; openLecture(open[0].id); } // the usual case: straight in
 }
@@ -114,6 +139,55 @@ async function refresh() {
   renderForum(L.forum);
   renderMaterials(L.materials);
 }
+
+// ---------- homework (feature 5): submit, then read the AI review ----------
+const fmtDate = ts => ts ? new Date(ts * 1000).toLocaleString([], { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+let assignments = [], hwId = null;
+function renderHomeworkList(list) {
+  assignments = list;
+  const key = JSON.stringify(list.map(a => [a.id, a.submission?.submitted_at]));
+  if (key === renderHomeworkList.last) return;  // the home screen refreshes every 3 s
+  renderHomeworkList.last = key;
+  $("hwCards").innerHTML = list.length ? list.map(a => `<button class="card lec-item" data-hw="${a.id}">
+      <b>${esc(a.title)}</b>
+      <div class="small muted">${esc(a.course)}${a.deadline ? ` · due ${fmtDate(a.deadline)}` : ""}</div>
+      <div class="small ${a.submission ? "ok" : "muted"}">${a.submission ? `✓ Last submitted ${fmtDate(a.submission.submitted_at)}${a.submission.late ? " (late)" : ""}` : "Not submitted yet"}</div>
+    </button>`).join("") : '<p class="muted small">No homework yet.</p>';
+  $("hwCards").querySelectorAll("[data-hw]").forEach(b => b.onclick = () => openHomework(+b.dataset.hw));
+}
+function openHomework(id) {
+  hwId = id; lectureId = null; closeMic();
+  const a = assignments.find(x => x.id === id);
+  $("homeView").classList.add("hidden"); $("lecView").classList.add("hidden"); $("hwView").classList.remove("hidden");
+  $("hwTitle").textContent = a.title;
+  $("hwMeta").textContent = `${a.course}${a.deadline ? " · due " + fmtDate(a.deadline) : " · no deadline"}`;
+  $("hwInstr").innerHTML = md(a.instructions);
+  $("hwFile").value = "";
+  showSubmission(a.submission);
+}
+function showSubmission(s) {
+  $("hwStatus").textContent = s ? `✓ Last submitted ${fmtDate(s.submitted_at)} (${s.filename})${s.late ? " — after the deadline" : ""}. Submitting again replaces it.`
+                                : "Not submitted yet.";
+  $("hwSubmitBtn").textContent = s ? "Submit again" : "Submit and get feedback";
+  $("hwReviewCard").classList.toggle("hidden", !s?.review);
+  $("hwReview").innerHTML = s?.review ? md(s.review) : "";
+}
+async function hwSend(path, body) {
+  $("hwSubmitBtn").disabled = $("hwAgainBtn").disabled = true;
+  $("hwReviewCard").classList.remove("hidden"); $("hwReview").textContent = "Reading your work and writing feedback… (up to a minute)";
+  const r = await api(path, body);
+  $("hwSubmitBtn").disabled = $("hwAgainBtn").disabled = false;
+  if (!r.ok) { toast("⚠ " + (r.error || "Not submitted")); showSubmission(assignments.find(x => x.id === hwId)?.submission); return; }
+  const a = assignments.find(x => x.id === hwId); if (a) a.submission = r.submission;
+  renderHomeworkList.last = null; showSubmission(r.submission); toast("✅ Submitted");
+}
+$("hwSubmitBtn").onclick = () => {
+  const f = $("hwFile").files[0]; if (!f) return toast("Choose your file first");
+  const fd = new FormData(); fd.append("file", f);
+  hwSend(`/api/my/assignments/${hwId}/submit`, fd);
+};
+$("hwAgainBtn").onclick = () => hwSend(`/api/my/assignments/${hwId}/review`, {});
+$("hwBackBtn").onclick = () => { hwId = null; $("hwView").classList.add("hidden"); home.visited = true; home(); };
 
 // ---------- materials ----------
 // The page refreshes every 3 s. Rebuilding the list would close any item the student opened,

@@ -7,8 +7,7 @@ import io
 import pytest
 
 from app import db as dbmod
-from app.ai_tools import (extractive_summary, parse_transcript, review_homework, similarity_matrix, speaking_stats,
-                          student_summary, teaching_feedback)
+from app.ai_tools import extractive_summary, parse_transcript, speaking_stats, student_summary, teaching_feedback
 from app.attendance import TOKEN_ALPHABET, TOKEN_LENGTH, TOKEN_TTL, AttendanceService
 from app.export import ExcelExporter
 from app.forum import ForumService
@@ -360,13 +359,6 @@ def test_ai_falls_back_when_the_provider_fails():
     llm = BrokenLLM("claude-haiku-5-5", "k")
     assert "unavailable" in teaching_feedback(VTT, llm)["note"]
     assert student_summary("A long enough sentence about polymorphism and classes.", llm)["report"]
-    out = review_homework({"noa": "def f(): pass", "dan": "def f(): pass"}, "", llm)
-    assert out["engine"].startswith("Offline") and out["pairs"][0]["similarity"] >= out["flag_threshold"]
-
-
-def test_similarity_ignores_comments_and_whitespace():
-    pairs = similarity_matrix({"a": "x = 1  # mine\n", "b": "x = 1", "c": "completely different code here"})
-    assert pairs[0] == {"a": "a", "b": "b", "similarity": 100}
 
 
 def test_extractive_summary_keeps_order_and_limit():
@@ -388,3 +380,77 @@ def test_excel_export(env):
     assert wb.sheetnames == ["Overview", f"L{lid} Intro", "Polls", "Forum"]
     rows = {r[0]: r[1] for r in wb["Overview"].iter_rows(min_row=2, values_only=True)}
     assert rows == {"Noa Levi": "Present", "Daniel Cohen": "Late"}
+
+
+# ---------------- FR-7.16–7.21: assignments and student homework review ----------------
+from app.homework import PEER_LIMIT, AssignmentService, STUDENT_REVIEW_PROMPT, review_submission
+from app.textfiles import UnsupportedFile, extract_text
+
+
+def make_docx(paragraphs):
+    """A minimal valid .docx built by hand (a zip with word/document.xml)."""
+    import zipfile
+    body = "".join(f"<w:p><w:r><w:t>{p}</w:t></w:r></w:p>" for p in paragraphs)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/'
+           f'wordprocessingml/2006/main"><w:body>{body}</w:body></w:document>')
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", xml)
+    return buf.getvalue()
+
+
+def test_extract_text_from_word_text_and_code():
+    assert extract_text("essay.docx", make_docx(["המהפכה הצרפתית", "פרץ ב-1789"])) == "המהפכה הצרפתית\nפרץ ב-1789"
+    assert extract_text("hw.py", b"x = 1\n") == "x = 1\n"
+    with pytest.raises(UnsupportedFile):
+        extract_text("photo.jpg", b"\xff\xd8")
+    with pytest.raises(UnsupportedFile):
+        extract_text("broken.docx", b"not a zip")
+
+
+def test_assignment_submit_resubmit_and_deadline(env):
+    hw = AssignmentService(env["conn"], env["clock"])
+    with pytest.raises(ValueError):
+        hw.create(env["cid"], "HW", "   ")                      # the assignment itself is required
+    aid = hw.create(env["cid"], "HW3", "Explain the causes of the French Revolution", deadline=env["clock"]() + 60)
+    hw.submit(aid, NOA, "noa.docx", "First draft")
+    first = hw.my_submission(aid, NOA)["submitted_at"]
+    env["clock"].advance(120)                                   # after the deadline
+    hw.submit(aid, NOA, "noa_v2.docx", "Second draft")           # replaces; the date shown is the latest
+    mine = hw.my_submission(aid, NOA)
+    assert mine["filename"] == "noa_v2.docx" and mine["submitted_at"] > first and mine["late"]
+    assert hw.submission_text(aid, NOA) == "Second draft"
+    assert hw.of_course(env["cid"])[0]["submitted"] == 1
+    assert hw.submissions(aid)[0]["name"] == "Noa Levi"          # the lecturer sees names
+    titles = [a["title"] for a in hw.for_student([env["cid"]], DAN)]
+    assert titles == ["HW3"] and hw.for_student([env["cid"]], DAN)[0]["submission"] is None
+
+
+def test_peers_are_limited_and_exclude_the_student(env):
+    hw = AssignmentService(env["conn"], env["clock"])
+    aid = hw.create(env["cid"], "HW", "Task")
+    env["roster"].import_into(env["cid"], CsvRosterSource("name\n" + "\n".join(f"S{i}" for i in range(8))))
+    for i in range(8):
+        env["clock"].advance(1)
+        hw.submit(aid, key_for_name(f"S{i}"), "f.txt", f"work {i}")
+    hw.submit(aid, NOA, "noa.txt", "mine")
+    peers = hw.peers(aid, NOA)
+    assert len(peers) == PEER_LIMIT == 5 and "mine" not in peers and peers[0] == "work 7"  # most recent first
+
+
+class RecordingLLM(OfflineClient.__mro__[1]):
+    provider = "google"
+
+    def complete(self, system, prompt):
+        self.system, self.prompt = system, prompt
+        return "### 1. עמידה בדרישות המטלה\n- ok"
+
+
+def test_student_review_sees_assignment_and_peers_without_names():
+    llm = RecordingLLM("gemini-3.5-flash-lite", "k")
+    review, engine = review_submission("Explain the causes", "My essay", ["Other essay A", "Other essay B"], llm)
+    assert review.startswith("**Model:** Google Gemini") and "עמידה בדרישות" in review
+    assert "Explain the causes" in llm.prompt and "My essay" in llm.prompt and "Other essay B" in llm.prompt
+    assert "NEVER quote" in llm.system and "Hebrew" in llm.system and "Do not give a grade" in llm.system
+    offline, _ = review_submission("x", "y", [], OfflineClient())
+    assert "AI key" in offline

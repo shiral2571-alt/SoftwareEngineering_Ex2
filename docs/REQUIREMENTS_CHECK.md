@@ -1,5 +1,7 @@
 # Requirements check
 
+> **Historical snapshot (2026-11-13).** This was the gap analysis that started the redesign. Every gap listed here was resolved or decided later; the final status is in [SRS.md](SRS.md) (status column and decision log) and [SOW.md §6](SOW.md).
+
 Status as of 2026-11-13. Sources:
 - **Assignment document:** I2SE_Exe2, including its Q&A.
 - **Q&A links:** the Ex1 repository list for feature 5, and Zoom's automatic summary of the class where the lecturer explained Ex2.

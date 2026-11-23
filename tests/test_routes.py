@@ -174,3 +174,24 @@ def test_public_address_for_qr_codes(app, lecturer):
     assert lecturer.post("/api/l/public-url", json={"public_url": "http://abc.com"}).status_code == 400  # no mic on http
     assert lecturer.post("/api/l/public-url", json={"public_url": ""}).json["public_url"] == ""
     assert app.test_client().get("/api/l/public-url").status_code == 401        # lecturer only
+
+
+def test_student_submits_homework_and_lecturer_sees_it(app, lecturer):
+    cid = course_id(lecturer)
+    r = lecturer.post(f"/api/l/courses/{cid}/assignments", data={"title": "HW3", "text": "Write about the revolution",
+                                                                  "deadline": "9999999999"})
+    aid = r.json["id"]
+    p = phone(app, "Noa Levi")
+    assert p.get("/api/my/assignments").json[0]["submission"] is None
+    import io as _io
+    up = p.post(f"/api/my/assignments/{aid}/submit", data={"file": (_io.BytesIO(b"My essay text"), "essay.txt")},
+                content_type="multipart/form-data")
+    assert up.json["ok"] and up.json["submission"]["filename"] == "essay.txt" and "Model:" in up.json["submission"]["review"]
+    bad = p.post(f"/api/my/assignments/{aid}/submit", data={"file": (_io.BytesIO(b"\xff"), "x.jpg")},
+                 content_type="multipart/form-data")
+    assert bad.status_code == 400
+    subs = lecturer.get(f"/api/l/assignments/{aid}").json["submissions"]
+    assert subs[0]["name"] == "Noa Levi" and not subs[0]["late"]
+    other_course = lecturer.post("/api/l/courses", json={"name": "Other"}).json["id"]
+    oid = lecturer.post(f"/api/l/courses/{other_course}/assignments", data={"title": "X", "text": "Y"}).json["id"]
+    assert p.post(f"/api/my/assignments/{oid}/review").status_code == 404   # not this student's course

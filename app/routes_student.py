@@ -1,6 +1,9 @@
 """Student (phone) routes."""
 from flask import abort, jsonify, redirect, render_template, request, session
 
+from .homework import review_submission
+from .textfiles import extract_text
+
 DEVICE_COOKIE = "device"
 DEVICE_COOKIE_AGE = 365 * 24 * 3600  # server-set HttpOnly cookie: survives Safari's 7-day script-storage cap
 
@@ -113,6 +116,48 @@ def register(app, svc):
         except ValueError as e:
             abort(400, str(e))
         return jsonify(ok=True)
+
+    # ------------------------------------------------------------------ homework (feature 5, FR-7.16–7.21)
+    def my_assignment(assignment_id, student):
+        a = svc.assignments.get(assignment_id)
+        if a is None or not svc.roster.is_enrolled(a["course_id"], student.student_id):
+            abort(404, "Assignment not found")
+        return a
+
+    def run_review(a, student):
+        mine = svc.assignments.submission_text(a["id"], student.student_id)
+        review, engine = review_submission(a["instructions"], mine,
+                                           svc.assignments.peers(a["id"], student.student_id), svc.llm())
+        svc.assignments.save_review(a["id"], student.student_id, review, engine)
+        return svc.assignments.my_submission(a["id"], student.student_id)
+
+    @app.get("/api/my/assignments")
+    def my_assignments():
+        s = me_or_401()
+        return jsonify(svc.assignments.for_student(svc.roster.courses_of(s.student_id), s.student_id))
+
+    @app.post("/api/my/assignments/<int:assignment_id>/submit")
+    def submit_homework(assignment_id):
+        s = me_or_401()
+        a = my_assignment(assignment_id, s)
+        f = request.files.get("file")
+        if not f or not f.filename:
+            abort(400, "Choose your file")
+        try:
+            text = extract_text(f.filename, f.read())
+            svc.assignments.submit(assignment_id, s.student_id, f.filename, text)
+        except ValueError as e:
+            abort(400, str(e))
+        return jsonify(ok=True, submission=run_review(a, s))
+
+    @app.post("/api/my/assignments/<int:assignment_id>/review")
+    def review_again(assignment_id):
+        """Ask for the review again, e.g. after the AI was unavailable, without uploading again."""
+        s = me_or_401()
+        a = my_assignment(assignment_id, s)
+        if svc.assignments.my_submission(assignment_id, s.student_id) is None:
+            abort(400, "Submit your work first")
+        return jsonify(ok=True, submission=run_review(a, s))
 
     @app.post("/api/post/<int:post_id>/upvote")
     def upvote(post_id):

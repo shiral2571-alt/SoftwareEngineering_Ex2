@@ -29,6 +29,7 @@
     <span class="grow" style="flex:1"></span>
     <button id="joinQrBtn">📱 Join QR</button>
     <a class="btn" id="exportBtn" href="#">⬇ Excel</a>
+    <button id="assignBtn">📝 Assignments</button>
     <button id="settingsBtn">⚙ Settings</button>
     <form method="post" action="/lecturer/logout" style="margin:0"><button class="small-btn">Log out</button></form>
   </div>
@@ -157,15 +158,6 @@
               </div>
               <div id="matList" style="margin-top:10px"></div>
             </div>
-            <div class="card">
-              <h2>📝 Homework review</h2>
-              <p class="muted small">Select all submissions at once (one file per student; the file name is the label).</p>
-              <textarea id="hwTask" rows="2" placeholder="Assignment text (optional, improves the review)"></textarea>
-              <input type="file" id="hwFiles" multiple style="margin-top:6px">
-              <button class="primary" id="hwBtn" style="margin-top:8px">Review & compare</button>
-              <p class="muted small" id="hwEngine"></p>
-              <div id="hwOut"></div>
-            </div>
           </div>
         </section>
       </div>
@@ -206,6 +198,27 @@
     <label for="volume">Volume (1–100)</label>
     <input id="volume" type="number" min="1" max="100" value="50">
     <button class="small-btn" id="testSoundBtn" style="margin-top:8px">Play a test sound</button>
+  </div>
+</div>
+
+<!-- Assignments (feature 5): students submit, and each gets an AI review that also compares with the class -->
+<div id="assignModal" class="modal hidden">
+  <div class="card" style="width:min(760px,100%)">
+    <div class="row"><h2 class="grow" style="margin:0">📝 Assignments — <span id="assignCourse"></span></h2><button class="small-btn" id="assignClose">✕</button></div>
+    <p class="muted small">Students submit from their phone and get an AI review that sees the assignment and compares their
+      work with up to 5 other submissions, in general terms only. Works for code and for written work (Word, PDF).</p>
+    <div class="qbox">
+      <b>New assignment</b>
+      <input id="asTitle" placeholder="Title, e.g. HW3 – The French Revolution" style="margin-top:6px">
+      <label for="asFile">The assignment itself (Word, PDF or text) — or paste it below</label>
+      <input type="file" id="asFile" accept=".docx,.pdf,.txt,.md">
+      <textarea id="asText" rows="3" placeholder="…or paste the assignment and its requirements / rubric" style="margin-top:6px"></textarea>
+      <label for="asDeadline">Deadline (optional)</label>
+      <input type="datetime-local" id="asDeadline" style="max-width:260px">
+      <button class="primary" id="asCreateBtn" style="margin-top:8px">Publish assignment</button>
+      <p class="small bad" id="asMsg"></p>
+    </div>
+    <div id="asList"></div>
   </div>
 </div>
 
@@ -273,7 +286,7 @@ $("newLecBtn").onclick = async () => {
 function selectLecture(id) {
   lectureId = id;
   $("lecList").querySelectorAll(".lec-item").forEach(b => b.setAttribute("aria-current", b.dataset.id == id));
-  $("aiOut").innerHTML = ""; $("aiEngine").textContent = ""; $("hwOut").innerHTML = "";
+  $("aiOut").innerHTML = ""; $("aiEngine").textContent = "";
   refresh();
 }
 
@@ -516,23 +529,6 @@ async function runAi(path, extra = {}) {
 }
 $("feedbackBtn").onclick = () => runAi(`/api/l/lectures/${lectureId}/feedback`);
 $("summaryBtn").onclick = () => runAi(`/api/l/lectures/${lectureId}/summary`, { visible: $("summaryVisible").checked });
-$("hwBtn").onclick = async () => {
-  const fd = new FormData();
-  for (const f of $("hwFiles").files) fd.append("files", f);
-  fd.append("assignment", $("hwTask").value);
-  $("hwOut").textContent = "Working…"; $("hwEngine").textContent = "";
-  const r = await api("/api/l/homework", fd);
-  if (!r.ok) { $("hwOut").textContent = "⚠ " + r.error; return; }
-  $("hwEngine").textContent = `Engine: ${r.engine}${r.note ? " · " + r.note : ""}`;
-  const pairs = r.pairs.map(p => `<tr><td>${esc(p.a)}</td><td>${esc(p.b)}</td>
-      <td class="${p.similarity >= r.flag_threshold ? "bad" : ""}">${p.similarity}%${p.similarity >= r.flag_threshold ? " ⚠ check" : ""}</td></tr>`).join("");
-  $("hwOut").innerHTML =
-    (pairs ? `<h3>Similarity between students</h3><table><tr><th>Student</th><th>Student</th><th>Similarity</th></tr>${pairs}</table>
-      <p class="muted small">High similarity is a reason to look, not proof of copying.</p>` : "") +
-    (r.comparison ? `<h3>Class comparison</h3><div class="md">${md(r.comparison)}</div>` : "") +
-    `<h3>Per student</h3>` + Object.entries(r.reviews).map(([n, t]) => `<div class="post"><b>${esc(n)}</b><div class="md small">${md(t)}</div></div>`).join("");
-};
-
 // ---------- settings (AI provider + sound) ----------
 let settings = null;
 async function openSettings() {
@@ -600,6 +596,45 @@ async function refresh() {
   syncBroadcast(win);
   renderSheet(); renderPolls(); renderForum(); renderMaterials();
 }
+// ---------- assignments ----------
+const fmtDate = ts => ts ? new Date(ts * 1000).toLocaleString([], { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+async function openAssignments() {
+  $("assignCourse").textContent = $("courseSel").selectedOptions[0]?.textContent.replace(/\s*\(\d+\)$/, "") || "";
+  $("assignModal").classList.remove("hidden");
+  const list = await api(`/api/l/courses/${courseId}/assignments`);
+  $("asList").innerHTML = list.length ? list.map(a => `<details class="post" data-aid="${a.id}">
+      <summary><b>${esc(a.title)}</b> <span class="muted small">· ${a.submitted} submitted
+        ${a.deadline ? `· deadline ${fmtDate(a.deadline)}` : "· no deadline"}</span>
+        <button class="small-btn" data-delas="${a.id}" style="float:right">🗑</button></summary>
+      <div class="small muted" style="margin:6px 0">Loading…</div></details>`).join("")
+    : '<p class="muted">No assignments yet.</p>';
+  $("asList").querySelectorAll("details").forEach(d => d.ontoggle = async () => {
+    if (!d.open) return;
+    const r = await api(`/api/l/assignments/${d.dataset.aid}`);
+    d.querySelector("div").outerHTML = `<div>${r.submissions.length ? r.submissions.map(s => `<details class="post" style="margin-left:12px">
+        <summary>${esc(s.name)} <span class="muted small">· ${esc(s.filename)} · last submitted ${fmtDate(s.submitted_at)}</span>
+        ${s.late ? '<span class="badge warn">late</span>' : ""}</summary>
+        <div class="md small">${s.review ? md(s.review) : '<p class="muted">No review yet.</p>'}</div></details>`).join("")
+      : '<p class="muted small" style="margin-left:12px">No submissions yet.</p>'}</div>`;
+  });
+  $("asList").querySelectorAll("[data-delas]").forEach(b => b.onclick = async e => {
+    e.preventDefault();
+    if (confirm("Delete this assignment and all its submissions?")) { await api(`/api/l/assignments/${b.dataset.delas}/delete`, {}); openAssignments(); }
+  });
+}
+$("assignBtn").onclick = openAssignments;
+$("assignClose").onclick = () => $("assignModal").classList.add("hidden");
+$("asCreateBtn").onclick = async () => {
+  const fd = new FormData();
+  fd.append("title", $("asTitle").value);
+  if ($("asFile").files[0]) fd.append("file", $("asFile").files[0]); else fd.append("text", $("asText").value);
+  if ($("asDeadline").value) fd.append("deadline", new Date($("asDeadline").value).getTime() / 1000);
+  const r = await api(`/api/l/courses/${courseId}/assignments`, fd);
+  if (!r.ok) { $("asMsg").textContent = "⚠ " + r.error; return; }
+  $("asMsg").textContent = ""; $("asTitle").value = $("asText").value = $("asDeadline").value = ""; $("asFile").value = "";
+  toast("Assignment published — students see it on their phones"); openAssignments();
+};
+
 $("savePublicBtn").onclick = async () => {
   const r = await api("/api/l/public-url", { public_url: $("publicUrl").value });
   $("publicMsg").className = "small " + (r.ok ? "ok" : "bad");

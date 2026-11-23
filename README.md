@@ -32,7 +32,7 @@ Every requirement, priority (MoSCoW) and design decision is in **[docs/SRS.md](d
 | 2 | Comments & suggestions | A forum per lecture: named or **fully anonymous** posts, lecturer replies, 👍 "me too", delete |
 | 3 | KISS polls | Sets of questions prepared in advance (in the app or from an xlsx/csv template): quiz with a correct answer, multiple choice, free text |
 | 4 | ML summary of class video | **Teaching feedback for the lecturer**: upload the Zoom transcript → measured pace and filler words + short AI feedback |
-| 5 | LLM homework review | Per-student review + cross-student similarity table |
+| 5 | LLM homework review | The lecturer publishes an assignment (optional deadline). **Students** submit from the phone (code, Word or PDF) and get an AI review that sees the assignment and compares with the class, never revealing others' work. The **lecturer** sees every submission and review |
 
 **AI provider:** choose Claude, Gemini or OpenAI and a model in ⚙ Settings, and paste an API key. The key stays on the server. Without a key, offline fallbacks run.
 **Out of scope:** Moodle/Zoom integration, and personal data beyond names (the lecturer's list has no ID numbers). See SRS §8 for everything marked *Won't*.
@@ -59,7 +59,7 @@ Then paste the `https://…trycloudflare.com` link in **⚙ Settings → Phone a
 5. Show the fallback: **🔲 Start check-in (QR)**, a code that changes every 15 s.
 6. **Polls:** press **▶ Launch** and show the live bars and the % correct.
 7. **Forum:** an anonymous question gets 👍 votes, and you reply.
-8. **Materials & AI:** upload `data/demo/lecture_transcript.vtt` and get **teaching feedback**. For homework review, use `data/demo/homework/*.py`; Noa and Maya are flagged as similar.
+8. **Materials & AI:** upload `data/demo/lecture_transcript.vtt` and get **teaching feedback**. **📝 Assignments:** publish an assignment; a student submits `data/demo/homework/student_noa.py` from the phone and gets a review.
 9. **■ Close** the lecture, then show that you can still edit it, or **↺ Reopen** it. Download **⬇ Excel**.
 
 ## Tests
@@ -79,7 +79,9 @@ app/
   polls.py           PollService · Question · xlsx/csv import + template
   forum.py           ForumService: posts, replies, 👍, delete
   llm.py             LLMClient (interface) · ClaudeClient · GeminiClient · OpenAIClient · OfflineClient · LLMSettings
-  ai_tools.py        teaching feedback · student summary · homework review
+  ai_tools.py        teaching feedback · student summary
+  homework.py        AssignmentService · student review prompt (feature 5)
+  textfiles.py       Word / PDF / text / code → plain text
   export.py          ExcelExporter
   routes_*.py        Flask routes (thin; logic lives in the services)
   static/sound.js    ggwave broadcast / listen

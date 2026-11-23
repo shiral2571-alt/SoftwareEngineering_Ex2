@@ -3,10 +3,8 @@ methods when no key is configured or the provider fails, so the live demo never 
 
 - Teaching feedback for the lecturer (feature 4, D-9)
 - Lecture summary for students (Could, FR-7.10)
-- Homework review + cross-student comparison (feature 5)
+(Feature 5, the student homework review, lives in homework.py.)
 """
-import difflib
-import itertools
 import re
 from collections import Counter
 
@@ -183,63 +181,3 @@ def student_summary(transcript: str, llm: LLMClient) -> dict:
     engine = OfflineClient().name
     report = f"{_model_line(engine, note)}\n\n**Key sentences**\n" + "\n".join(f"- {b}" for b in extractive_summary(text))
     return {"engine": engine, "report": report, "note": note}
-
-
-# ------------------------------------------------------------------ feature 5: homework review
-def _normalize(code: str) -> str:
-    code = re.sub(r"#.*|//.*", "", code)          # drop comments
-    return re.sub(r"\s+", " ", code).strip().lower()
-
-
-def similarity_matrix(submissions: dict[str, str]) -> list[dict]:
-    """Pairwise similarity (0–100%) after removing comments and whitespace. Deterministic, no LLM (FR-7.14)."""
-    norm = {k: _normalize(v) for k, v in submissions.items()}
-    pairs = []
-    for a, b in itertools.combinations(sorted(norm), 2):
-        ratio = difflib.SequenceMatcher(None, norm[a], norm[b], autojunk=False).ratio()
-        pairs.append({"a": a, "b": b, "similarity": round(ratio * 100)})
-    return sorted(pairs, key=lambda p: p["similarity"], reverse=True)
-
-
-SUSPICIOUS_SIMILARITY = 85  # % — flagged for the lecturer to look at, never an automatic verdict
-
-
-def review_homework(submissions: dict[str, str], assignment: str, llm: LLMClient) -> dict:
-    if not submissions:
-        raise ValueError("Upload at least one submission")
-    pairs = similarity_matrix(submissions)
-    reviews, note = {}, ""
-    use_llm = not isinstance(llm, OfflineClient)
-    for name, content in sorted(submissions.items()):
-        content, clip_note = _clip(content)
-        if clip_note:
-            note += f"{name}: {clip_note} "
-        if use_llm:
-            try:
-                reviews[name] = llm.complete(
-                    "You are a teaching assistant reviewing one student's homework. Be specific and kind. "
-                    "Markdown, max 120 words: 'Strengths', 'To improve', and a suggested grade out of 100 "
-                    "with one line of justification. The lecturer makes the final decision.",
-                    f"Assignment:\n{assignment or '(not given)'}\n\nSubmission ({name}):\n{content}")
-                continue
-            except Exception as e:
-                use_llm = False
-                note += f"AI unavailable ({e.__class__.__name__}); offline review shown. "
-        lines = content.splitlines()
-        comments = sum(1 for l in lines if l.strip().startswith(("#", "//")))
-        funcs = len(re.findall(r"\bdef |\bfunction |\bclass ", content))
-        reviews[name] = (f"- {len(lines)} lines, {len(content.split())} words\n"
-                         f"- {funcs} functions/classes, {comments} comment lines\n"
-                         f"- (Add an API key in Settings for a written review.)")
-    comparison = ""
-    if use_llm and len(submissions) > 1:
-        try:
-            overview = "\n\n".join(f"### {n}\n{_clip(c)[0][:4000]}" for n, c in sorted(submissions.items()))
-            comparison = llm.complete(
-                "Compare several students' solutions to the same assignment for the lecturer. Markdown, max 150 words: "
-                "common mistakes, the strongest approach, and who may need help. Do not accuse anyone of copying.",
-                f"Assignment:\n{assignment or '(not given)'}\n\n{overview}")
-        except Exception:
-            comparison = ""
-    return {"engine": llm.name if use_llm else OfflineClient().name, "reviews": reviews, "pairs": pairs,
-            "comparison": comparison, "flag_threshold": SUSPICIOUS_SIMILARITY, "note": note.strip()}

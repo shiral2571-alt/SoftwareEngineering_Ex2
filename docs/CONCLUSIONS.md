@@ -9,9 +9,9 @@ A KISS smartphone web app for teaching in class, organised around **the lecture 
 2. **Forum** per lecture: named or fully anonymous posts, lecturer replies, 👍.
 3. **KISS polls:** sets of questions prepared in advance or imported from a template; quizzes show % correct.
 4. **Teaching feedback** from the class transcript, written in Hebrew, including the lecturer's commitments to students as tasks.
-5. **Homework review** with a deterministic similarity table plus LLM comments.
+5. **Homework review for students and teachers.** Students submit an assignment (code, or a Word/PDF essay) and get an AI review that sees the assignment and compares their work with the class without revealing anyone else's. The lecturer sees all submissions and their reviews.
 
-It is backed by 49 automated tests and a full set of design documents (SoW, SRS with 18 decisions, use cases, components, class, sequence and state diagrams, testing strategy, tools report).
+It is backed by 54 automated tests and a full set of design documents (SoW, SRS with 24 decisions, use cases, components, class, sequence and state diagrams, testing strategy, tools report).
 
 ## Results
 | Goal | Result |
@@ -37,6 +37,7 @@ It is backed by 49 automated tests and a full set of design documents (SoW, SRS 
 - **Names-only identity:** someone could claim a friend's name first. This is detected when the friend tries, and the lecturer resets it.
 - **The server runs on the lecturer's laptop.** The forum and materials are unavailable when the laptop is off.
 - **Teaching-feedback quality depends on the transcript.** Speakers are often unlabelled, and copying from Zoom can lose text.
+- **The student homework review was not tested with a real AI model.** The flow is covered by automated tests, but the quality of the review, and whether the model keeps the "never reveal another student's work" rule, are unverified.
 
 ## Future work
 - Host the server in the cloud, so the forum and materials work after class.

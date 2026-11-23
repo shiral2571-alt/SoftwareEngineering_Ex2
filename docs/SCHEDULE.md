@@ -1,5 +1,7 @@
 # Ex2 — One-Week Schedule
 
+> **Historical working plan.** Kept for the record; the actual timeline is in [SOW.md §7](SOW.md).
+
 Deadline: **2026-11-25** (from the assignment Q&A, read 2026-11-13). The day-by-day plan below was written for the earlier working date of 2026-11-15 and should be re-planned.
 Numbers in brackets refer to the assignment's To-Do list.
 

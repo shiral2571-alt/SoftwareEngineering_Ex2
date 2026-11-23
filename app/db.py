@@ -102,6 +102,24 @@ CREATE TABLE IF NOT EXISTS materials (
     visible_to_students INTEGER NOT NULL DEFAULT 0,
     at         REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS assignments (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id    INTEGER NOT NULL REFERENCES courses(id),
+    title        TEXT NOT NULL,
+    instructions TEXT NOT NULL,                -- the assignment as the lecturer uploaded it (text)
+    deadline     REAL,                         -- optional (D-23)
+    created_at   REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS submissions (
+    assignment_id INTEGER NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+    student_id    TEXT NOT NULL REFERENCES students(student_id),
+    filename      TEXT NOT NULL,
+    content       TEXT NOT NULL,
+    submitted_at  REAL NOT NULL,               -- the latest submission counts (versions are future work)
+    review        TEXT,
+    engine        TEXT,
+    PRIMARY KEY (assignment_id, student_id)
+);
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL

@@ -14,6 +14,7 @@ from . import db as dbmod
 from .app_settings import AppSettings
 from .attendance import AttendanceService
 from .forum import ForumService
+from .homework import AssignmentService
 from .identity import DeviceRegistry
 from .lectures import LectureService, MaterialService
 from .llm import LLMSettings
@@ -36,6 +37,7 @@ class Services:
     materials: MaterialService
     llm_settings: LLMSettings
     app_settings: AppSettings
+    assignments: AssignmentService
     llm_override: object = None  # tests inject a fake LLM here
 
     def llm(self):
@@ -53,7 +55,8 @@ def create_app(db_path: str = "teaching_tool.db", lecturer_pin: str | None = Non
     svc = Services(courses=CourseService(conn), roster=roster, devices=DeviceRegistry(conn, roster),
                    lectures=LectureService(conn), attendance=AttendanceService(conn), polls=PollService(conn),
                    forum=ForumService(conn), materials=MaterialService(conn), llm_settings=LLMSettings(conn),
-                   app_settings=AppSettings(conn), llm_override=llm)
+                   app_settings=AppSettings(conn), assignments=AssignmentService(conn),
+                   llm_override=llm)
     if os.environ.get("PUBLIC_URL"):  # e.g. set by the start script from the tunnel address
         svc.app_settings.set_public_url(os.environ["PUBLIC_URL"])
     if not svc.courses.all() and SAMPLE_ROSTER.exists():  # first run: a demo course with a fictional roster

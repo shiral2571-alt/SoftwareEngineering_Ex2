@@ -138,6 +138,29 @@ classDiagram
 ```
 `kind` is *quiz* (with a correct answer), *choice* or *text*. An anonymous post stores **no** student at all.
 
+### B3b. Homework (feature 5)
+```mermaid
+classDiagram
+    direction LR
+    class AssignmentService {
+        +create(course_id, title, instructions, deadline)
+        +submit(assignment_id, student_id, filename, text)
+        +peers(assignment_id, student_id) list
+        +save_review(assignment_id, student_id, review)
+    }
+    class TextFiles {
+        <<module>>
+        +extract_text(filename, data) str
+    }
+    class StudentReview {
+        <<function>>
+        +review_submission(assignment, work, peers, llm)
+    }
+    AssignmentService ..> TextFiles : uploads read by
+    StudentReview ..> AssignmentService : peers from
+```
+`peers()` returns at most **5** recent submissions, as text only, without names. The review prompt forbids revealing them.
+
 ### B4. AI providers (Strategy pattern)
 ```mermaid
 classDiagram
@@ -212,6 +235,27 @@ sequenceDiagram
     end
     TF-->>API: report, with "Model: …" on top
     API-->>UI: show it and save it in Materials
+```
+
+### B7. Sequence: a student submits homework (low level)
+```mermaid
+sequenceDiagram
+    participant P as Student phone
+    participant API as Flask routes
+    participant HW as AssignmentService
+    participant R as review_submission
+    participant C as LLMClient
+
+    P->>API: upload essay.docx
+    API->>API: extract_text() → plain text
+    API->>HW: submit() — replaces any earlier one
+    API->>HW: peers() — 5 recent, no names
+    API->>R: review(assignment, work, peers)
+    R->>C: complete(student prompt, …)
+    C-->>R: review in Hebrew
+    R-->>API: review with "Model: …"
+    API->>HW: save_review()
+    API-->>P: review + latest submission date
 ```
 
 > **More detail:** every method is in the code (`app/*.py`), and each one is covered by a test listed in the [Testing strategy](TESTING_STRATEGY.md).

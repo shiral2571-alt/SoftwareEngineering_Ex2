@@ -21,7 +21,7 @@ A web application for **one lecturer** and the **students** of their courses. St
 | 2 | Comments and suggestions, real time / offline | §4.6 Forum |
 | 3 | On-the-spot KISS polls | §4.5 Polls |
 | 4 | ML summary of the class video | §4.7.2 Teaching feedback |
-| 5 | Deep LLM review of homework with comparison | §4.7.3 Homework review |
+| 5 | Deep LLM review of homework with comparison | §4.7.4 Student homework review |
 
 ### 1.3 Definitions
 | Term | Meaning |
@@ -192,12 +192,24 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 | FR-7.11 | A link (URL) to a Zoom recording | Won't | — |
 | FR-7.12 | The report is saved in the lecture's materials | Should | ✅ |
 
-#### 4.7.3 Homework review (feature 5)
+#### 4.7.3 Lecturer batch review (removed, D-24)
 | ID | Requirement | Priority | Demo |
 |---|---|---|---|
-| FR-7.13 | Upload submissions (one file per student) → per-student LLM review | Must | ✅ |
-| FR-7.14 | Cross-student comparison: a similarity table (deterministic, no LLM). High similarity is flagged as "check", never as an automatic verdict | Must | ✅ |
-| FR-7.15 | Review from a **list of GitHub repository links**. The lecturer provided a list of Ex1 repositories for testing. Cut for time (D-19); the file upload covers the demo | Won't (now) | — |
+| FR-7.13 | ~~The lecturer uploads all submissions at once → per-student LLM review~~ Replaced by the assignments flow (§4.7.4) | Removed | — |
+| FR-7.14 | ~~A cross-student similarity table~~ Replaced by the qualitative comparison in the student review (FR-7.18) | Removed | — |
+| FR-7.15 | ~~Review from a list of GitHub repository links~~ (D-19) | Removed | — |
+
+#### 4.7.4 Student homework review (feature 5: "Students & teachers can get a deep review… including comparisons to other students' work")
+| ID | Requirement | Priority | Demo |
+|---|---|---|---|
+| FR-7.16 | The lecturer publishes an **assignment** in a course: a title, the assignment itself (uploaded Word/PDF/text, or pasted, optionally with a rubric) and an **optional deadline** | Must | ✅ |
+| FR-7.17 | Files are read as text by format: **Word (.docx), PDF, text and code**. Scans and handwriting are not supported (no OCR) | Must | ✅ |
+| FR-7.18 | A student uploads their work from the phone and gets an **AI review** that sees **the assignment, their work and up to 5 recent submissions of other students** (D-22). It is written in Hebrew: meeting the requirements, strengths, what to improve, and **a comparison with the class in general terms only** | Must | ✅ (not tested with a real AI model) |
+| FR-7.19 | The AI **never reveals** another student's work (no quotes, no descriptions), never invents facts (it marks them "לבדיקה"), and gives no grade. Other submissions reach the AI as text only, without names | Must | ✅ |
+| FR-7.20 | Submitting again **replaces** the earlier submission, and the **date of the latest submission** is shown. Submissions after the deadline are accepted and marked **late** (D-23) | Must | ✅ |
+| FR-7.21 | The lecturer sees every submission: name, file, latest date, late flag, and the review the student got | Must | ✅ |
+| FR-7.22 | Keep every version of a submission (history) | Won't (now) | — |
+| FR-7.23 | ~~The batch tool reads Word/PDF and ignores quotations~~ The file reader (FR-7.17) now serves the assignments flow | Removed | — |
 
 ---
 
@@ -267,6 +279,9 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 | D-19 | 2026-11-23 | Homework review from GitHub links (FR-7.15) moved from Should to Won't (now) | Two days before the deadline, the documents had priority. Review from uploaded files already demonstrates feature 5 |
 | D-20 | 2026-11-23 | A live relay of the check-in code (E13) is an accepted risk | Codes already stop *replay* (recordings, photos). Stopping a live *relay* would need location checks that the web cannot do reliably. The effort for a cheater is high, and the lecturer can compare counts |
 | D-21 | 2026-11-23 | QR codes use a saved **public address** instead of the page's own address (FR-4.6a) | On one network the laptop could not open the tunnel address, so it ran on `localhost`, and QR codes for `localhost` cannot work on phones. With a saved address, the QR works even where the laptop is blocked, which reduces demo risk R-2 |
+| D-22 | 2026-11-23 | Students get their own AI review with a **qualitative** comparison to up to **5** recent submissions. There is **no number** for students (no "% similar") | This is the team's vision, like the teaching feedback: the AI sees the assignment and other work, and explains in words. 5 peers is enough to compare and keeps the request small. The prompt forbids revealing others' work, which would otherwise let a student copy through the review |
+| D-23 | 2026-11-23 | An **optional deadline**. Late submissions are accepted and flagged, not blocked. Resubmitting replaces the work and shows the latest date; versions are future work | KISS. The lecturer decides what "late" means for grading |
+| D-24 | 2026-11-23 | The lecturer's batch review tool (upload all files at once, similarity table) was **removed** | The assignments flow (§4.7.4) covers feature 5 for both students and lecturers: every submission and its review is kept, and the lecturer sees them all. Two tools for the same job confused users. A numeric similarity table was not wanted (D-22) |
 | D-16 | 2026-11-17 | Students can **get ready before** the lecturer starts the sound (FR-4.4a), with a 2-minute limit | Real-phone test: the *Check in* button appeared only after the sound had started, so the first broadcast was missed and the flow felt clumsy. Listening early fixes this, and the time limit keeps the privacy promise (NFR-4) |
 
 ---
@@ -274,10 +289,10 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 ## 8. MoSCoW summary
 | Priority | Requirements |
 |---|---|
-| **Must** | FR-1.1 · FR-2.1–2.3 · FR-3.1–3.4 · FR-4.1–4.12 · FR-5.1–5.3, 5.5, 5.7, 5.8 · FR-6.1–6.4 · FR-7.1, 7.1a, 7.2–7.6, 7.13, 7.14 |
+| **Must** | FR-1.1 · FR-2.1–2.3 · FR-3.1–3.4 · FR-4.1–4.12 · FR-5.1–5.3, 5.5, 5.7, 5.8 · FR-6.1–6.4 · FR-7.1, 7.1a, 7.2–7.6, 7.16–7.21 |
 | **Should** | FR-3.5 · FR-5.4, 5.6 · FR-6.5 · FR-7.7, 7.12 |
 | **Could** | FR-7.1b, 7.8, 7.9, 7.10 |
-| **Won't (now)** | FR-1.2 multiple lecturers · FR-4.13 photo count · FR-4.14 pulses / check-out / continuous listening · FR-7.11 Zoom URL · Moodle integration · FR-7.15 homework from GitHub links |
+| **Won't (now)** | FR-1.2 multiple lecturers · FR-4.13 photo count · FR-4.14 pulses / check-out / continuous listening · FR-7.11 Zoom URL · Moodle integration · FR-7.22 submission versions |
 
 **If time runs short,** these Must items move down to Should first, in this order: FR-7.1 with three providers (keep one), then FR-6.5 and FR-6.3 forum replies.
 

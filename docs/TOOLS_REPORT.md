@@ -51,7 +51,7 @@ For each tool: why we chose it, the alternatives, **what we tested in real life 
 
 ## 3. Web framework and storage: Flask + SQLite
 **Why:** Flask is minimal, easy to read and easy to test with `test_client()`. SQLite needs no server: a single file. **Alternatives:** Django (too heavy for KISS), FastAPI (async adds complexity we did not need).
-**Tested:** 49 automated tests ([Testing strategy](TESTING_STRATEGY.md)); real phones and laptop during all tests above.
+**Tested:** 54 automated tests ([Testing strategy](TESTING_STRATEGY.md)); real phones and laptop during all tests above.
 **Live updates:** short polling every 2–3 s instead of WebSockets (D-13). Simpler, and it works through the tunnel. **Real-life finding:** polling rebuilt the materials list every 3 s, so items the student opened kept closing on the phone. Fixed by rebuilding only when the data changes.
 
 ## 4. QR codes: qrcode-generator 1.4.4 (JS)
@@ -69,6 +69,7 @@ For each tool: why we chose it, the alternatives, **what we tested in real life 
 | Same, after the prompt was given Hebrew headings (D-18) | Gemini 3.5 Flash-Lite | ✅ **Answered in Hebrew** |
 | Input check | — | ⚠️ The first copy from Zoom's panel captured only **1,671 of 4,557 words**, so run 1 judged a third of the lecture. Our "Words" statistic revealed this |
 | Claude, OpenAI | — | ⚠️ The code path is implemented and unit-tested with fakes; **not run against the real API** (no key available) |
+| **Student homework review** (FR-7.16–7.21) | — | ⚠️ **Not tested with a real AI model.** The flow (assignment, submission, peers, prompt, saved review) is covered by automated tests with fake models; the quality of the review, and whether the model obeys "never reveal another student's work", are **untested** |
 | No key, or no internet | Offline fallback | ✅ The measured statistics are still shown; nothing crashes |
 
 **Impact:**
@@ -79,13 +80,15 @@ For each tool: why we chose it, the alternatives, **what we tested in real life 
 - **Privacy:** the transcript is sent to the chosen provider. This is acceptable for a course test, and must be stated to users.
 
 ## 7. Testing: pytest
-**Why:** the standard Python test runner; fixtures and a fake clock keep the tests fast and deterministic. **Result:** 49 tests in about 4 s, with no network.
+**Why:** the standard Python test runner; fixtures and a fake clock keep the tests fast and deterministic. **Result:** 54 tests in about 4 s, with no network.
 
 ## 8. Still to test before the demo
 | Test | Why | Pass criterion |
 |---|---|---|
 | ~~The lecture hall, back row~~ | ✅ Done 11-23 (T11–T12): audible works from the back of the empty hall, ultrasound does not | — |
 | The lecture hall **with students present** | T11 was in an empty, quiet hall | Every phone checks in within 30 s; otherwise switch to QR |
+| Student homework review with a real model, 2+ submissions | Untested (see §6) | The review is in Hebrew, has the 4 sections, and never quotes another student's work |
+| A PDF submission | The PDF reader is untested on real files | The text is read; a scanned PDF gets a clear error |
 | ~~QR scan from a phone~~ | ✅ Done 11-23: two phones (university Wi-Fi and mobile data) scanned the check-in QR and were checked in | — |
 | 3–5 phones at once | A small load test | Everyone checks in; the counter is correct |
 | *(Optional)* The sound relayed over a WhatsApp call | The relay risk E13 | Record whether it decodes. Either result goes into this report |
