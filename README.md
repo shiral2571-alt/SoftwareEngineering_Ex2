@@ -12,6 +12,20 @@ One simple web app per course, built around **the lecture as an object**: *Draft
 
 Every requirement, priority (MoSCoW) and design decision is in **[docs/SRS.md](docs/SRS.md)**. Background: [docs/CONCEPT.md](docs/CONCEPT.md).
 
+## Assignment documents
+| To-Do | Document |
+|---|---|
+| 1 · Problem and scope | This README |
+| 3 · Tools report (tested in real life) | [docs/TOOLS_REPORT.md](docs/TOOLS_REPORT.md) |
+| 4 · SoW (with happy and edge cases) | [docs/SOW.md](docs/SOW.md) |
+| 5 · SRS (requirements, MoSCoW, decision log) | [docs/SRS.md](docs/SRS.md) |
+| 6 · Use cases (client stories) | [docs/USE_CASES.md](docs/USE_CASES.md) |
+| 7 · Software components | [docs/COMPONENTS.md](docs/COMPONENTS.md) |
+| 8 · Class, sequence and state diagrams | [docs/DIAGRAMS.md](docs/DIAGRAMS.md) |
+| 9 · Testing strategy | [docs/TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md) |
+| 10 · Demo web app | `app/` (see *Run it* below) |
+| 12 · Conclusions | [docs/CONCLUSIONS.md](docs/CONCLUSIONS.md) |
+
 | # | Assignment feature | In the app |
 |---|---|---|
 | 1 | Automatic attendance + spreadsheet | Check-in window by sound or rotating QR; Present / Late / Absent, editable by the lecturer; live sheet + Excel per course |
@@ -71,5 +85,6 @@ app/
   static/sound.js    ggwave broadcast / listen
   templates/         student.html (phone) · lecturer.html (laptop / projector)
 spike/sound-test/    the original proof-of-concept page used for the real-device tests
-docs/                SRS.md · CONCEPT.md · REQUIREMENTS_CHECK.md · SCHEDULE.md
+docs/                SOW · SRS · USE_CASES · COMPONENTS · DIAGRAMS · TESTING_STRATEGY · TOOLS_REPORT · CONCLUSIONS
+                     (+ CONCEPT, REQUIREMENTS_CHECK, SCHEDULE: working notes)
 ```

@@ -3,7 +3,7 @@
 **Project:** Acoustic Attendance — a web-based teaching tool
 **Course:** Introduction to Software Engineering (OOP/OOD), Ex2
 **Version:** 0.2 · 2026-11-16 (status column updated after implementation)
-**Related documents:** [README](../README.md) · [CONCEPT](CONCEPT.md) · [REQUIREMENTS_CHECK](REQUIREMENTS_CHECK.md)
+**Related documents:** [README](../README.md) · [SoW](SOW.md) · [Use cases](USE_CASES.md) · [Components](COMPONENTS.md) · [Diagrams](DIAGRAMS.md) · [Testing strategy](TESTING_STRATEGY.md) · [Tools report](TOOLS_REPORT.md) · [Conclusions](CONCLUSIONS.md) · [CONCEPT](CONCEPT.md)
 
 ---
 
@@ -196,7 +196,7 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 |---|---|---|---|
 | FR-7.13 | Upload submissions (one file per student) → per-student LLM review | Must | ✅ |
 | FR-7.14 | Cross-student comparison: a similarity table (deterministic, no LLM). High similarity is flagged as "check", never as an automatic verdict | Must | ✅ |
-| FR-7.15 | Review from a **list of GitHub repository links**. The lecturer provided a list of Ex1 repositories for testing | Should | 🔧 |
+| FR-7.15 | Review from a **list of GitHub repository links**. The lecturer provided a list of Ex1 repositories for testing. Cut for time (D-19); the file upload covers the demo | Won't (now) | — |
 
 ---
 
@@ -239,6 +239,7 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 | E10 | Invalid AI key or no internet | Clear message and offline fallback (FR-7.4) |
 | E11 | Inappropriate anonymous post | The lecturer deletes it (FR-6.4) |
 | E12 | The roster has duplicate names | Import is refused with a message telling the lecturer to tell the names apart |
+| E13 | A student in class relays the sound (or the QR) **live** to a friend at home, e.g. over a WhatsApp call, within the 20 s window | **Accepted risk** (D-20): it needs a live accomplice in every lecture. Recordings and photos sent later are already rejected. The lecturer compares the counter with the room |
 
 ---
 
@@ -262,6 +263,8 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 | D-15 | 2026-11-16 | 2–3 well-known models per provider, from cheap/fast (free tier where available) to the strongest, plus a custom-ID field | Lecturers differ in budget; model names change often, so the list must be easy to update |
 | D-17 | 2026-11-17 | The teaching-feedback prompt was written by the team (FR-7.6): question statistics, examples / clarity / mistakes, 3 keep + 3 improve, commitments as tasks, brief, and "say so rather than invent" | Focuses on what a lecturer can act on next week. Forbidding guesses keeps the AI honest on poor transcripts, e.g. when speakers are not labelled |
 | D-18 | 2026-11-17 | Teaching feedback is always in Hebrew; the prompt gives Hebrew section headings. Every AI report names its model (FR-7.6a) | First real test (Gemini 3.5 Flash-Lite, real lecture transcript) answered in English although asked for "the language of the transcript". Small models copy the language of the headings. The team will use the model it has, so the prompt must compensate. Naming the model makes results comparable in the Tools Report |
+| D-19 | 2026-11-23 | Homework review from GitHub links (FR-7.15) moved from Should to Won't (now) | Two days before the deadline, the documents had priority. Review from uploaded files already demonstrates feature 5 |
+| D-20 | 2026-11-23 | A live relay of the check-in code (E13) is an accepted risk | Codes already stop *replay* (recordings, photos). Stopping a live *relay* would need location checks that the web cannot do reliably. The effort for a cheater is high, and the lecturer can compare counts |
 | D-16 | 2026-11-17 | Students can **get ready before** the lecturer starts the sound (FR-4.4a), with a 2-minute limit | Real-phone test: the *Check in* button appeared only after the sound had started, so the first broadcast was missed and the flow felt clumsy. Listening early fixes this, and the time limit keeps the privacy promise (NFR-4) |
 
 ---
@@ -270,9 +273,9 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 | Priority | Requirements |
 |---|---|
 | **Must** | FR-1.1 · FR-2.1–2.3 · FR-3.1–3.4 · FR-4.1–4.12 · FR-5.1–5.3, 5.5, 5.7, 5.8 · FR-6.1–6.4 · FR-7.1, 7.1a, 7.2–7.6, 7.13, 7.14 |
-| **Should** | FR-3.5 · FR-5.4, 5.6 · FR-6.5 · FR-7.7, 7.12, 7.15 |
+| **Should** | FR-3.5 · FR-5.4, 5.6 · FR-6.5 · FR-7.7, 7.12 |
 | **Could** | FR-7.1b, 7.8, 7.9, 7.10 |
-| **Won't (now)** | FR-1.2 multiple lecturers · FR-4.13 photo count · FR-4.14 pulses / check-out / continuous listening · FR-7.11 Zoom URL · Moodle integration |
+| **Won't (now)** | FR-1.2 multiple lecturers · FR-4.13 photo count · FR-4.14 pulses / check-out / continuous listening · FR-7.11 Zoom URL · Moodle integration · FR-7.15 homework from GitHub links |
 
 **If time runs short,** these Must items move down to Should first, in this order: FR-7.1 with three providers (keep one), then FR-6.5 and FR-6.3 forum replies.
 
