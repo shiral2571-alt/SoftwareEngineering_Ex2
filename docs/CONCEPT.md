@@ -110,6 +110,11 @@ Spike page for these tests: `spike/sound-test/index.html` (has a built-in test l
 - Registration, microphone and check-in worked end to end. ✅
 - Reception worked **only very close to the laptop**. App defaults were used: ultrasound, Volume 50. Exact distance and phone model were not recorded.
   → Next: measure with Volume 100 and with Audible, and try the room's speakers (HDMI or projector audio) instead of the laptop speaker.
+### Lecture-hall test (2026-11-23)
+- The real auditorium: laptop at the lecturer's desk, **iPhone 17 Pro Max** at the back of the hall (the full depth).
+- **Audible: received ✅. Ultrasound: not received ❌.**
+- Limitation: the hall was empty and quiet (no other people), and only one phone model was tested.
+
 ### Teaching feedback with a real AI model (2026-11-17)
 - Gemini 3.5 Flash-Lite on a real lecture transcript, pasted from Zoom's transcript panel without timings.
 - **First run:** it followed the structure and the "don't guess" rule: it said student questions could not be counted because speakers are not labelled. It found one commitment and listed it as a task. But it **answered in English**.

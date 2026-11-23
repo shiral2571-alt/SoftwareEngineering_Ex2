@@ -283,5 +283,5 @@ Format: **ID · requirement · priority**. Status in the current demo: ✅ exist
 
 ## 9. Open issues
 - ~~**OI-1** Automatic stop of the check-in window?~~ **Resolved (D-14):** no automatic stop; the lecturer ends check-in.
-- **OI-2** The sound must still be tested in the real lecture hall (back row, 2–3 phones). If it fails, QR becomes the recommended default (risk R-1 in the SoW). *The team will run this test.*
+- ~~**OI-2** Test the sound in the real lecture hall.~~ **Done 2026-11-23:** audible sound was received at the back of the auditorium (iPhone 17 Pro Max, empty and quiet hall); ultrasound was not. This confirms D-2. Still to watch: a full, noisy class.
 - ~~**OI-3** Which models to list per provider?~~ **Resolved (D-15)**, see FR-7.1a. The teaching-feedback prompt is resolved too (D-17).

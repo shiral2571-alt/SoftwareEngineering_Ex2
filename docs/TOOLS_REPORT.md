@@ -3,7 +3,7 @@
 Assignment To-Do #3: *"Perform a technical-related tools report — make sure to test (in real life) with any suggested tool."*
 For each tool: why we chose it, the alternatives, **what we tested in real life and the result**, and how the result changed the design. Raw test notes are in [CONCEPT.md §8](CONCEPT.md). Design decisions (D-n) are in the [SRS](SRS.md).
 
-> **Honesty note.** Distances and phone models were not always recorded in the early tests. Results marked *not recorded* are observations, not measurements. The lecture-hall test is still planned (§6).
+> **Honesty note.** Distances and phone models were not always recorded in the early tests. Results marked *not recorded* are observations, not measurements. The lecture-hall test (T11–T12) was done in an empty hall.
 
 ---
 
@@ -24,6 +24,8 @@ For each tool: why we chose it, the alternatives, **what we tested in real life 
 | T8 | 11-10 | Full app, real phone | Audible normal | ✅ Received further away |
 | T9 | 11-17 | Full app, real phone, *get ready early* | Audible normal | ✅ Checked in on the **first** broadcast; mic closed afterwards |
 | T10 | 11-17 | Same phone and setup | Ultrasound | ❌ Not received |
+| **T11** | **11-23** | **The real lecture hall (auditorium):** laptop at the lecturer's desk, **iPhone 17 Pro Max** at the **back of the hall** (the full depth). Empty and quiet hall | **Audible normal** | ✅ **Received** |
+| **T12** | **11-23** | Same | Ultrasound | ❌ Not received |
 
 ### Impact on the design
 - **Use only `NORMAL` protocols, and never trust a decoded string** (T2). The phone checks the code's shape, and the server rejects any code it did not just issue.
@@ -31,7 +33,9 @@ For each tool: why we chose it, the alternatives, **what we tested in real life 
 - **Audible sound is the default, and ultrasound is only an option** (T7, T10 → D-2). Audible sound does not disturb, because the lecture pauses for check-in anyway.
 - **A wall blocks the sound** (T5). This supports "only people in the room", but obstacles inside a big hall are a risk, so the QR is an equal alternative (SoW R-1).
 - **Students can get ready before the sound starts** (D-16). In the 11-16 phone test the *Check in* button appeared only after the sound had started, so the first broadcast was missed. T9 confirms the fix.
-- *Not recorded:* exact distances and phone models. These will be measured in the hall test.
+- **The lecture-hall test (T11, T12) confirms the design:** audible sound reaches the back of the real hall, and ultrasound does not.
+- **Limitation of T11:** the hall was **empty and quiet**, and only one phone model was tested. A full class absorbs sound and adds noise, so the QR remains the fallback. The demo rehearsal with several phones is the next check.
+- *Not recorded:* exact distances in metres for T4–T10.
 
 ## 2. HTTPS for phones: Cloudflare quick tunnel (`cloudflared`)
 **Why:** browsers allow the microphone only on HTTPS, and phones cannot reach `localhost`. A quick tunnel gives a public HTTPS address in one command, with no account. **Alternatives:** ngrok (needs an account), a self-signed certificate (phones reject it), cloud hosting (future work).
@@ -79,7 +83,8 @@ For each tool: why we chose it, the alternatives, **what we tested in real life 
 ## 8. Still to test before the demo
 | Test | Why | Pass criterion |
 |---|---|---|
-| **The lecture hall:** back row, 2–3 phones, audible | The biggest demo risk | Every phone checks in within 30 s of *Start check-in*; otherwise switch the demo to QR |
+| ~~The lecture hall, back row~~ | ✅ Done 11-23 (T11–T12): audible works from the back of the empty hall, ultrasound does not | — |
+| The lecture hall **with students present** | T11 was in an empty, quiet hall | Every phone checks in within 30 s; otherwise switch to QR |
 | QR scan from a phone through the tunnel | Not yet confirmed | The scan opens the app and checks in |
 | 3–5 phones at once | A small load test | Everyone checks in; the counter is correct |
 | *(Optional)* The sound relayed over a WhatsApp call | The relay risk E13 | Record whether it decodes. Either result goes into this report |

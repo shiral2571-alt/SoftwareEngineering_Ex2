@@ -42,7 +42,7 @@ The classes are those in [COMPONENTS.md](COMPONENTS.md) and [DIAGRAMS.md](DIAGRA
 ## 4. What is not automated, and how it is covered
 | Area | Why not automated | Real-life test |
 |---|---|---|
-| `sound.js`, ggwave over the air | Needs a speaker, air and a microphone | Real phone tests: audible ✅, ultrasound ❌, *get ready early* ✅; the lecture hall test is planned |
+| `sound.js`, ggwave over the air | Needs a speaker, air and a microphone | Real phone tests: audible ✅, ultrasound ❌, *get ready early* ✅; **real auditorium, back row: audible ✅, ultrasound ❌** (empty hall) |
 | Mic opening and closing on iOS/Android | Browser permission UI | Real phone: the mic indicator disappears after check-in ✅ |
 | QR scan with a phone camera | Needs a camera | Demo rehearsal |
 | Real LLM output quality | Paid, non-deterministic | Gemini 3.5 Flash-Lite on a real lecture transcript ✅ (structure, honesty, Hebrew after D-18) |

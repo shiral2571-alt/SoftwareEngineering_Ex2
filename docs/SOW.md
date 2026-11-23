@@ -109,7 +109,7 @@ The lecturer asked for a "Happy Case" and "Edge Cases" for student registration 
 ## 8. Risks and mitigations
 | # | Risk | Likelihood | Mitigation |
 |---|---|---|---|
-| R-1 | The sound does not reach the back rows of the large lecture hall | Medium | Audible sound by default; rotating QR as an equal alternative; manual marking. Go/no-go test in the hall before the demo |
+| R-1 | The sound does not reach the back rows of the large lecture hall | Low–Medium | Audible sound by default; rotating QR as an equal alternative; manual marking. Go/no-go test in the hall before the demo. **Tested 11-23:** audible reached the back of the empty auditorium (iPhone 17 Pro Max) |
 | R-2 | The demo network blocks the HTTPS tunnel. This happened on one network, where the laptop could not resolve the tunnel address | Medium | Phones use mobile data; the lecturer dashboard runs on `localhost`; a backup network (phone hotspot) |
 | R-3 | The AI provider is down, or the key is invalid, during the demo | Low | Offline fallback for every AI feature; a report prepared in advance in the lecture's materials |
 | R-4 | A live relay of the code (E13) | Low | Accepted and documented; the lecturer compares the count with the room |

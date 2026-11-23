@@ -19,12 +19,12 @@ It is backed by 49 automated tests and a full set of design documents (SoW, SRS 
 | Attendance that can't be shared on WhatsApp | ✅ Codes live 20–30 s, and only while the lecturer keeps check-in open. Recordings and photos sent later are rejected (tested) |
 | One-tap check-in on a real phone | ✅ With *get ready early*, the phone checked in on the first broadcast, and the mic closed |
 | Quiet (ultrasound) check-in | ❌ Unreliable with laptop speakers: very short range, then not received. **Audible is the default**, since the lecture pauses for check-in anyway |
-| Works in the real large lecture hall | ⏳ To be confirmed in the hall test; the QR path is the fallback |
+| Works in the real large lecture hall | ✅ Audible sound reached the back of the real auditorium (iPhone 17 Pro Max; empty, quiet hall). Ultrasound did not |
 | LLM-ready teaching tools | ✅ A real lecture transcript with Gemini gave a structured, honest report, in Hebrew after a prompt fix |
 | KISS | ✅ No installation, no typing after registration, names only |
 
 ## What we learned
-1. **Test the risky tool first, on real devices.** A one-day sound spike on a real phone shaped the whole design. Ultrasound looked perfect on paper and failed in practice, and audible sound plus a rotating QR made the system robust.
+1. **Test the risky tool first, on real devices.** A one-day sound spike on a real phone shaped the whole design. Ultrasound looked perfect on paper and failed in practice, even in the real auditorium. Audible sound reached the back row there, and together with a rotating QR it made the system robust.
 2. **Requirements hide in more than the written spec.** The assignment said "ML summary of class video". Only the lecturer's explanation in class showed that he meant *feedback for the lecturer*. The Q&A also changed our identity design, because ID numbers were removed. Reading every source of requirements is part of engineering.
 3. **Small real tests find real bugs.** A missed first sound, materials collapsing every 3 seconds on the phone, an AI answering in the wrong language, and a copied transcript holding only a third of the lecture were all found by trying the system with real people and data. None of them showed up in unit tests.
 4. **Interfaces paid off.** Because the AI features depend only on `LLMClient`, adding Gemini and OpenAI did not touch the feature code. Fixing time with an injected clock made expiry rules testable in milliseconds.
@@ -32,7 +32,7 @@ It is backed by 49 automated tests and a full set of design documents (SoW, SRS 
 6. **Vibe coding needs a driver.** An AI assistant wrote most of the code quickly, but the decisions, the real-life tests and the corrections came from the team. The most valuable outputs were the decision log and the test results, not the lines of code.
 
 ## Limitations
-- **Not yet verified in the large hall.** Sound range there is unknown, and the QR is the fallback.
+- **Hall tested only empty and with one phone model.** A full, noisy class may reduce range; the QR is the fallback.
 - **A live relay** of the sound or the QR to a friend at home within 20 s (E13) is possible. It is an accepted risk, and the lecturer compares the counter with the room.
 - **Names-only identity:** someone could claim a friend's name first. This is detected when the friend tries, and the lecturer resets it.
 - **The server runs on the lecturer's laptop.** The forum and materials are unavailable when the laptop is off.
