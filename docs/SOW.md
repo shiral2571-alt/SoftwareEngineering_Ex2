@@ -35,6 +35,8 @@ Attendance is the main feature. Taking it by hand wastes class time. The usual d
 | Documents | README, SoW, SRS, use cases, components, class and sequence diagrams, testing strategy, tools report, conclusions |
 | Demo | A 10-minute live demo with real phones |
 
+> **AI in the demo (features 4 and 5).** The AI features need an API key for Claude, Gemini or OpenAI. Teaching feedback was tested with a real model (Gemini). The **student homework review was not tested with a real model.** If no key is configured on the demo laptop, a submission is still accepted and the student sees *"an AI review needs an AI key"*. We will say this explicitly in the demo, and show a review prepared in advance where possible.
+
 ### 3.2 Out of scope
 Per the assignment guidelines, *"no need to integrate with Moodle, Zoom or personal data"*, and *"you should only design what can be implemented"*:
 - Moodle integration: the roster is a file exported by hand.
@@ -111,7 +113,7 @@ The lecturer asked for a "Happy Case" and "Edge Cases" for student registration 
 |---|---|---|---|
 | R-1 | The sound does not reach the back rows of the large lecture hall | Low–Medium | Audible sound by default; rotating QR as an equal alternative; manual marking. Go/no-go test in the hall before the demo. **Tested 11-23:** audible reached the back of the empty auditorium (iPhone 17 Pro Max) |
 | R-2 | The demo network blocks the HTTPS tunnel. This happened on one network, where the laptop could not resolve the tunnel address | Medium | QR codes use the saved public address (D-21), so the laptop can stay on `localhost`; phones use mobile data; the lecturer dashboard runs on `localhost`; a backup network (phone hotspot) |
-| R-3 | The AI provider is down, or the key is invalid, during the demo | Low | Offline fallback for every AI feature; a report prepared in advance in the lecture's materials |
+| R-3 | The AI provider is down, the key is invalid, or **no key is configured**, during the demo | Low–Medium | Offline fallback for every AI feature (statistics only, or the submission saved with a note). Say it explicitly in the demo, and show a report prepared in advance |
 | R-4 | A live relay of the code (E13) | Low | Accepted and documented; the lecturer compares the count with the room |
 | R-5 | The scope grows beyond the time available | High (it did) | MoSCoW: Should/Could items were cut first (homework review from GitHub links, video upload) |
 

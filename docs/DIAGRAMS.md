@@ -53,55 +53,106 @@ classDiagram
         <<interface>>
         +load() list~Student~
     }
+    class TableRosterSource {
+        -header: list
+        -rows: list
+        +load() list~Student~
+    }
     class CsvRosterSource
     class XlsxRosterSource
-    RosterSource <|.. CsvRosterSource
-    RosterSource <|.. XlsxRosterSource
+    RosterSource <|.. TableRosterSource
+    TableRosterSource <|-- CsvRosterSource
+    TableRosterSource <|-- XlsxRosterSource
 
     class Student {
+        <<dataclass>>
         +student_id: str
         +name: str
     }
+    class CourseService {
+        -db: Connection
+        -clock
+        +create(name) int
+        +all() list
+        +get(course_id) dict
+    }
     class CourseRoster {
-        +import_into(course_id, source)
-        +students_of(course_id) list
+        -db: Connection
+        +import_into(course_id, source) int
+        +students_of(course_id) list~Student~
+        +is_enrolled(course_id, student_id) bool
         +find_by_name(name) Student
     }
     class DeviceRegistry {
+        -db: Connection
+        -roster: CourseRoster
+        -clock
         +claim(student, device) ClaimResult
         +student_for(device) Student
         +reset(student_id)
     }
+    class ClaimResult {
+        <<dataclass>>
+        +ok: bool
+        +device_token: str
+        +error: str
+    }
     CourseRoster ..> RosterSource : reads from
     CourseRoster --> Student : manages
     DeviceRegistry --> CourseRoster : looks up
+    DeviceRegistry ..> ClaimResult : returns
 ```
-**Design note:** `RosterSource` is an interface. Today the list comes from a CSV or Excel file; a Moodle source could be added later without changing `CourseRoster` (Open/Closed principle).
+**Design note:** `RosterSource` is an interface. Today the list comes from a CSV or Excel file. A Moodle source could be added later without changing `CourseRoster` (Open/Closed principle).
 
 ### B2. Lectures and attendance
 ```mermaid
 classDiagram
     direction LR
     class LectureService {
+        -db: Connection
+        -clock
         +create(course_id, title) int
         +open(lecture_id)
         +close(lecture_id)
         +reopen(lecture_id)
+        -_move(lecture_id, new_state)
+    }
+    class MaterialService {
+        -db: Connection
+        -clock
+        +add(lecture_id, kind, title, content, visible) int
+        +of_lecture(lecture_id, students_only) list
     }
     class AttendanceService {
-        +open_window(lecture_id, channel)
+        -db: Connection
+        -clock
+        +open_window(lecture_id, channel) int
         +close_window(lecture_id)
         +issue_token(lecture_id) str
         +heard(student_id, token) HeardResult
         +set_status(lecture_id, student_id, status)
+        +sheet(lecture_id, students) list
     }
     class HeardResult {
+        <<dataclass>>
         +ok: bool
         +message: str
     }
-    LectureService <.. AttendanceService : check-in only in an open lecture
+    class Database {
+        <<SQLite>>
+        lectures
+        checkin_windows
+        tokens
+        attendance
+        materials
+    }
+    LectureService --> Database : writes lectures.state
+    MaterialService --> Database : materials
+    AttendanceService --> Database : windows, tokens, attendance
+    AttendanceService ..> Database : reads lectures.state directly
     AttendanceService ..> HeardResult : returns
 ```
+**Design note:** the two services are **not** linked in code. `AttendanceService` reads the lecture's state straight from the shared `lectures` table, so it opens a check-in window only in an **open** lecture. This keeps the services independent, at the cost of both knowing the table. `LectureService.close()` also ends any open check-in window.
 
 **The lecture's states:**
 ```mermaid
@@ -118,21 +169,29 @@ Any other move, for example closing a draft, is refused (`LectureStateError`).
 classDiagram
     direction LR
     class PollService {
-        +create(lecture_id, title, questions)
+        -db: Connection
+        -clock
+        +create(lecture_id, title, questions, show_correct) int
         +launch(poll_id)
-        +answer(question_id, student_id, choice)
+        +close(poll_id)
+        +answer(question_id, student_id, option, text) bool
+        +for_student(lecture_id, student_id) list
     }
     class Question {
+        <<dataclass>>
         +text: str
         +kind: str
         +options: list
         +correct: int
-        +validate()
+        +validate() Question
     }
     class ForumService {
-        +post(lecture_id, student_id, text, anonymous)
-        +reply(post_id, text)
-        +toggle_upvote(post_id, student_id)
+        -db: Connection
+        -clock
+        +post(lecture_id, student_id, text, anonymous) int
+        +reply(post_id, text) int
+        +toggle_upvote(post_id, student_id) bool
+        +delete_post(post_id)
     }
     PollService "1" --> "*" Question : contains
 ```
@@ -143,10 +202,13 @@ classDiagram
 classDiagram
     direction LR
     class AssignmentService {
-        +create(course_id, title, instructions, deadline)
+        -db: Connection
+        -clock
+        +create(course_id, title, instructions, deadline) int
         +submit(assignment_id, student_id, filename, text)
+        +my_submission(assignment_id, student_id) dict
         +peers(assignment_id, student_id) list
-        +save_review(assignment_id, student_id, review)
+        +save_review(assignment_id, student_id, review, engine)
     }
     class TextFiles {
         <<module>>
@@ -161,12 +223,15 @@ classDiagram
 ```
 `peers()` returns at most **5** recent submissions, as text only, without names. The review prompt forbids revealing them.
 
-### B4. AI providers (Strategy pattern)
+### B4. AI providers (Strategy pattern) and settings
 ```mermaid
 classDiagram
     direction TB
     class LLMClient {
         <<abstract>>
+        +provider: str
+        +model: str
+        -api_key: str
         +complete(system, prompt) str
     }
     class ClaudeClient
@@ -179,17 +244,27 @@ classDiagram
     LLMClient <|-- OfflineClient
 
     class LLMSettings {
+        -db: Connection
         +save(provider, model, key)
+        +public_view() dict
         +client() LLMClient
+    }
+    class AppSettings {
+        -db: Connection
+        +public_url() str
+        +set_public_url(url) str
     }
     class TeachingFeedback {
         <<function>>
         +teaching_feedback(transcript, llm)
     }
+    class ExcelExporter {
+        +build(course_id) bytes
+    }
     LLMSettings ..> LLMClient : creates the chosen one
     TeachingFeedback ..> LLMClient : uses only the interface
 ```
-**Why this matters:** the teaching-feedback code talks only to `LLMClient`. Adding Gemini and OpenAI next to Claude did not change it at all. `OfflineClient` is used when there is no key, so nothing crashes.
+**Why this matters:** the teaching-feedback code talks only to `LLMClient`. Adding Gemini and OpenAI next to Claude did not change it at all. `OfflineClient` is used when there is no key, so nothing crashes. `AppSettings` keeps the public phone address used by every QR code, and `ExcelExporter` builds the offline spreadsheet from the other services.
 
 ---
 

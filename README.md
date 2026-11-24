@@ -44,6 +44,7 @@ py run.py
 ```
 The server prints the lecturer dashboard address (`http://localhost:5000/lecturer`) and a **lecturer PIN**. To use a fixed PIN, set `LECTURER_PIN` first.
 On the first run, a demo course with the fictional `data/sample_roster.csv` is created.
+**After updating to a new version, delete `teaching_tool.db`** before running. The database structure changes between versions and is not migrated, so an old file makes actions like creating a lecture fail.
 
 Phones need HTTPS for the microphone, so open a tunnel in a second terminal:
 ```bash

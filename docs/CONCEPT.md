@@ -1,8 +1,15 @@
 # Core Concept — Acoustic & Continuous Attendance
 
+> ⚠️ **Historical document — replaced by the [SRS](SRS.md).** This was the starting concept (2026-11-08).
+> Several ideas here were **changed after real-life tests** and are no longer part of the design:
+> - **Presence pulses and continuous listening were removed** (SRS D-5). Check-in is a single window that the lecturer opens.
+> - **Ultrasound is not the default.** It failed on real phones and in the auditorium, so **audible sound is the default** (D-2).
+>
+> The test logs in §8 are still the raw record behind the [Tools report](TOOLS_REPORT.md).
+> For the current design, read the [SRS](SRS.md) and the [SoW](SOW.md).
+
 > Ex2 – Introduction to Software Engineering (OOP/OOD): Web-based Teaching Tool
-> Status: **agreed concept** (2026-11-08). This file is the single source of truth for the core idea;
-> all later documents (README, SRS, SoW, diagrams) must stay consistent with it.
+> Original status: agreed concept (2026-11-08).
 
 ## 1. The problem with "obvious" attendance
 Most solutions use a static QR code or a short code on the board. Both share two weaknesses:
